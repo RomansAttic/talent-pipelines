@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>The AI Safety Talent Pipeline</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Mobile warning -->
+  <div id="mobile-msg">
+    <div class="mobile-inner">
+      <div class="mobile-icon">🖥️</div>
+      <h2>Desktop Required</h2>
+      <p>This interactive visualization requires a desktop browser with at least 1100px width. Please visit on a PC or laptop for the full experience.</p>
+    </div>
+  </div>
+
+  <!-- Title page -->
+  <div id="title-page" class="page active">
+    <canvas id="title-canvas"></canvas>
+    <div id="title-content">
+      <div class="title-eyebrow">AI Safety Community · Interactive Visualization</div>
+      <h1>The AI Safety<br><span class="accent">Talent Pipeline</span></h1>
+      <p class="title-desc">
+        Millions of people could contribute to AI safety — but most never find their way in.
+        Each dot below is a person, falling like a drop of water through the pipeline from
+        first contact to impactful career. Watch where the pipeline leaks, and why.
+      </p>
+      <button id="start-btn" class="cta-btn">Let's Get Started <span class="arrow">→</span></button>
+      <div class="key-stats">
+        <div class="key-stat">
+          <div class="stat-num">~20%</div>
+          <div class="stat-lbl">of potential participants ever enter the pipeline</div>
+        </div>
+        <div class="key-stat">
+          <div class="stat-num">&lt;2%</div>
+          <div class="stat-lbl">of those who enter reach an AI safety career</div>
+        </div>
+        <div class="key-stat">
+          <div class="stat-num">3 roles</div>
+          <div class="stat-lbl">are critically undersupplied right now</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pipeline page -->
+  <div id="pipeline-page" class="page">
+    <div id="pipeline-header">
+      <button id="back-btn">← Back</button>
+      <h2>The AI Safety Talent Pipeline</h2>
+      <div id="header-legend"></div>
+    </div>
+    <div id="pipeline-wrap">
+      <canvas id="pipeline-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- Hover info panel (leaks, tanks, buckets) -->
+  <div id="leak-panel" class="side-panel hidden">
+    <div id="leak-tag" class="leak-tag">Pipeline Leak</div>
+    <h3 id="leak-title"></h3>
+    <p id="leak-problem" class="leak-text" style="white-space: pre-line;"></p>
+    <p id="leak-hint" class="leak-hint"></p>
+    <div id="leak-solution-wrap" class="hidden">
+      <div class="solution-header">Partial Fix Applied</div>
+      <p id="leak-solution" class="leak-text solution-text"></p>
+      <p id="leak-impact" class="impact-note"></p>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/particles.js"></script>
+  <script src="js/pipeline.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
