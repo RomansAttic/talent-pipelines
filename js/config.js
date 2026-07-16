@@ -1,26 +1,31 @@
 // js/config.js — All constants, data definitions
+// All descriptive text in this file comes from Roman's post "A Complete
+// Overview of Our AI Safety Talent Pipelines"; footnotes and post-only
+// asides are stripped, otherwise wording is preserved verbatim.
 
-// ── Full-bleed depth layers behind the whole pipeline, atmosphere-diagram
-// style — the deeper the layer, the further along the pipeline someone
-// has gotten. Boundaries are computed from the live layout (tank/rail/
-// ground positions), not stored here; this just carries each layer's
-// name, solid color, and the description text that fades in on hover.
+// ── Full-bleed depth layers behind the whole pipeline — the deeper the
+// layer, the further along the pipeline someone has gotten. Boundaries
+// are computed from the live layout; this carries each layer's name,
+// solid color, and description. Descriptions fade in (and stay) once the
+// layer has scrolled into view.
 const PIPELINE_LAYERS = [
   {
-    id: 'discovery', label: 'DISCOVERY', color: '#eef1f4',
-    text: 'Millions of people could contribute to AI safety, but of everyone who might, roughly 80% never meaningfully encounter the field at all — the droplets shown here are a tiny sample of those who do. They arrive through a YouTube video, a friend\'s offhand mention, or a conference talk, but a first spark of interest rarely turns into anything more without a next step to take.',
+    id: 'discovery', label: 'FIRST DISCOVERING AI SAFETY', color: '#eef1f4',
+    text: 'Most people never learn about existential risks from AI. And from amongst the ones who do, most never think seriously about them. This is bad: we want people to care enough about the problems to vote on them or work on them, and we want people with clever objections to our arguments to push back against our mistakes. The first stage in the pipeline lets us tell people about these risks, but it only succeeds to the extent that it encourages people to engage further.',
+    // Rendered bold, on its own line below the description.
+    hint: 'Hover over the various “leaks” to see where people are getting lost, and click on them to see proposed fixes.',
   },
   {
     id: 'caring', label: 'REALLY STARTING TO CARE', color: '#dfe4e8',
-    text: 'Once curiosity turns into real interest, people look for a way in — joining a local group, attending an event like EAG, or finding community online. This is also where quiet, unforced disengagement takes the largest toll.',
+    text: 'Up to this point, people have learned a decent amount about AI safety, and they have some thoughts about how concerned we should be about existential risks. However, only now do they really consider the possibility of working on it full-time. Many people need something to inspire them, like being part of a community (physical or virtual) that takes AI risks seriously, going to an event where they meet other people worried about AI, or finding some other reasons to care enough about AI to want to work on it directly.',
   },
   {
     id: 'upskilling', label: 'UPSKILLING', color: '#cfd6db',
-    text: 'Turning interest into capability means building real skills — through independent study, fellowships, or research programs — and starting to decide which kind of role in AI safety actually fits.',
+    text: 'People are committed and care about AI safety. However, many of them lack the relevant skills and context necessary to do meaningful work in AI safety. This point in the pipeline prepares people to take on a job.',
   },
   {
-    id: 'jobs', label: 'CAREER CHOICES', color: '#bfc8cf',
-    text: 'The few who make it this far land in one of five career paths — technical research, policy, generalist leadership, communications, or information security — each facing a very different supply-and-demand gap.',
+    id: 'jobs', label: 'JOB DECISIONS', color: '#bfc8cf',
+    text: 'Relevant skills have been acquired, so now it’s time for our people to choose their jobs. At this point along the way, we have plenty of people excited to do technical research, but not as many people with good outreach skills, organizing/generalist skills, or information security skills. At some points along the pipeline, they were lost, and the materials that advise them which careers they should go into don’t help fix the bottlenecks. An additional worry is that for many people, the choice of career path is sticky, meaning that when people commit to a certain job type, they’re much less likely to leave.',
   },
 ];
 
@@ -60,391 +65,397 @@ const CONFIG = {
   // Scales each stage's authored escapeRate into an actual per-checkpoint
   // probability. Tuned per-stage (rather than one global number) so that,
   // despite different leak counts/rates per stage, roughly 1 in 10 droplets
-  // that enter a given major pipe survive to the far end.
-  LEAK_SEVERITY: { funnel: 1.5, caring: 2.2, upskilling: 1.3, jobs: 1.15 },
+  // that enter a given major pipe survive to the far end — keeping the
+  // visible downstream flow sparse. shortfall covers the invisible
+  // supply-gap attrition on undersupplied bucket branches (below).
+  LEAK_SEVERITY: { funnel: 1.5, caring: 2.2, upskilling: 1.3, jobs: 1.15, shortfall: 1.0 },
+  // Invisible per-branch attrition for the bucket paths the field fails to
+  // supply. Tuned (together with each person type's bucketWeights) so these
+  // four buckets each receive roughly 1 successful entry for every 20 that
+  // make it to Technical Research.
+  BUCKET_SHORTFALL: { scalers: 0.80, ops: 0.87, generalist: 0.65, comms: 0.85 },
   CENTER_X: 800,             // updated at runtime
 };
 
+// Shared tooltip text for every droplet, from the post's "Categories of
+// People" section — the invitation is the same regardless of who you are.
+const PERSON_PROMPT = 'Try to imagine yourself as this person. Think about every stage of the pipeline you go through. Where do you get lost? How can things be made easier for you?';
+
 const PERSON_TYPES = [
   {
-    id: 'highschool',
-    label: 'High School Student',
-    color: '#B7CCE0',
-    weight: 0.20,
-    description: 'Young people still in high school, often introduced via YouTube or EA clubs. A large potential cohort with a long runway.',
-    funnelWeights: { youtube:0.28, misc:0.20, lesswrong:0.14, university:0.10, friends:0.09, events:0.06, blogs:0.05, fellowships:0.02, activist:0.02, movies:0.02, conferences:0.01, protests:0.01 },
-    bucketWeights: { research:0.28, policy:0.20, generalist:0.30, comms:0.17, infosec:0.05 },
+    id: 'undergrad', label: 'Undergraduate Student', color: '#90AFC9', weight: 0.22,
+    description: PERSON_PROMPT,
+    funnelWeights: { university:0.28, friends:0.16, fellowships:0.12, youtube:0.10, misc:0.08, blogs:0.06, forums:0.04, events:0.06, movies:0.02, books:0.03, activist:0.02, protests:0.01, conferences:0.02 },
+    bucketWeights: { research:0.40, policy:0.20, scalers:0.05, ops:0.12, generalist:0.13, comms:0.10 },
   },
   {
-    id: 'undergrad',
-    label: 'Undergraduate Student',
-    color: '#90AFC9',
-    weight: 0.28,
-    description: 'University students — the largest and most reachable cohort. Campus EA/AI Safety groups are the primary pathway.',
-    funnelWeights: { university:0.30, friends:0.18, fellowships:0.13, events:0.08, blogs:0.09, youtube:0.07, misc:0.05, lesswrong:0.04, conferences:0.02, activist:0.02, movies:0.01, protests:0.01 },
-    bucketWeights: { research:0.45, policy:0.25, generalist:0.15, comms:0.10, infosec:0.05 },
+    id: 'phd', label: 'PhD Student', color: '#5E7F9C', weight: 0.16,
+    description: PERSON_PROMPT,
+    funnelWeights: { conferences:0.22, fellowships:0.20, blogs:0.14, forums:0.08, friends:0.12, university:0.06, books:0.05, youtube:0.04, misc:0.04, events:0.03, activist:0.01, movies:0.005, protests:0.005 },
+    bucketWeights: { research:0.60, policy:0.15, scalers:0.04, ops:0.05, generalist:0.10, comms:0.06 },
   },
   {
-    id: 'phd',
-    label: 'PhD Student / Researcher',
-    color: '#5E7F9C',
-    weight: 0.20,
-    description: 'Graduate researchers in ML, CS, or philosophy. The strongest pipeline of any group — and the most directly recruited.',
-    funnelWeights: { fellowships:0.26, conferences:0.22, blogs:0.17, friends:0.13, events:0.08, misc:0.05, lesswrong:0.03, university:0.03, youtube:0.01, activist:0.01, movies:0.005, protests:0.005 },
-    bucketWeights: { research:0.65, policy:0.15, generalist:0.10, comms:0.05, infosec:0.05 },
+    id: 'infosec', label: 'Mid-career: InfoSec', color: '#97A3AE', weight: 0.08,
+    description: PERSON_PROMPT,
+    funnelWeights: { conferences:0.24, misc:0.14, youtube:0.12, friends:0.12, events:0.10, blogs:0.08, forums:0.05, books:0.05, activist:0.04, movies:0.03, protests:0.02, university:0.005, fellowships:0.005 },
+    bucketWeights: { research:0.35, policy:0.08, scalers:0.07, ops:0.20, generalist:0.20, comms:0.10 },
   },
   {
-    id: 'infosec',
-    label: 'Mid-career: InfoSec',
-    color: '#97A3AE',
-    weight: 0.07,
-    description: 'Security professionals with directly applicable skills (red-teaming, adversarial thinking). Critically undersupplied — and rarely reached.',
-    funnelWeights: { conferences:0.28, misc:0.18, friends:0.13, activist:0.12, events:0.12, youtube:0.09, blogs:0.05, fellowships:0.01, university:0.01, lesswrong:0.01, movies:0.00, protests:0.00 },
-    bucketWeights: { infosec:0.45, research:0.20, generalist:0.20, policy:0.10, comms:0.05 },
+    id: 'comms', label: 'Mid-career: Communications', color: '#7C93A8', weight: 0.08,
+    description: PERSON_PROMPT,
+    funnelWeights: { misc:0.18, movies:0.14, books:0.12, friends:0.13, events:0.12, activist:0.10, youtube:0.09, blogs:0.06, conferences:0.03, protests:0.02, forums:0.01 },
+    bucketWeights: { comms:0.50, policy:0.15, generalist:0.15, ops:0.10, scalers:0.05, research:0.05 },
   },
   {
-    id: 'comms',
-    label: 'Mid-career: Communications',
-    color: '#7C93A8',
-    weight: 0.07,
-    description: 'PR, journalism, and comms professionals. The pipeline almost never reaches them, despite critical need.',
-    funnelWeights: { misc:0.20, activist:0.20, movies:0.16, events:0.14, friends:0.13, youtube:0.09, conferences:0.05, blogs:0.01, fellowships:0.01, university:0.01, lesswrong:0.00, protests:0.00 },
-    bucketWeights: { comms:0.45, policy:0.20, generalist:0.20, research:0.10, infosec:0.05 },
+    id: 'swe', label: 'Mid-career: Software Engineering', color: '#6C8CA6', weight: 0.10,
+    description: PERSON_PROMPT,
+    funnelWeights: { youtube:0.16, blogs:0.16, misc:0.14, forums:0.10, conferences:0.12, friends:0.11, books:0.06, events:0.08, fellowships:0.02, movies:0.02, activist:0.02, protests:0.01 },
+    bucketWeights: { research:0.45, ops:0.15, generalist:0.15, scalers:0.10, policy:0.10, comms:0.05 },
   },
   {
-    id: 'swe',
-    label: 'Mid-career: SWE',
-    color: '#6C8CA6',
-    weight: 0.08,
-    description: 'Industry software engineers. Technical background helps, but the pipeline is weak for non-academic entrants.',
-    funnelWeights: { youtube:0.18, blogs:0.18, misc:0.16, conferences:0.16, friends:0.13, events:0.10, lesswrong:0.05, fellowships:0.02, university:0.01, activist:0.005, movies:0.005, protests:0.00 },
-    bucketWeights: { research:0.50, generalist:0.20, infosec:0.15, policy:0.10, comms:0.05 },
+    id: 'econ', label: 'Mid-career: Economics', color: '#AAB4BD', weight: 0.07,
+    description: PERSON_PROMPT,
+    funnelWeights: { blogs:0.22, books:0.12, conferences:0.18, friends:0.14, misc:0.10, forums:0.06, events:0.08, fellowships:0.04, youtube:0.03, activist:0.02, movies:0.01 },
+    bucketWeights: { policy:0.50, research:0.20, generalist:0.15, ops:0.05, scalers:0.05, comms:0.05 },
   },
   {
-    id: 'econ',
-    label: 'Mid-career: Economist',
-    color: '#AAB4BD',
-    weight: 0.05,
-    description: 'Economists and policy analysts. Valuable for governance; a moderate pipeline exists via policy networks.',
-    funnelWeights: { blogs:0.22, conferences:0.22, friends:0.18, fellowships:0.13, events:0.10, misc:0.08, university:0.05, youtube:0.01, activist:0.005, lesswrong:0.005, movies:0.00, protests:0.00 },
-    bucketWeights: { policy:0.55, research:0.20, generalist:0.15, comms:0.05, infosec:0.05 },
+    id: 'policy', label: 'Mid-career: Policy', color: '#B7CCE0', weight: 0.08,
+    description: PERSON_PROMPT,
+    funnelWeights: { conferences:0.20, books:0.14, blogs:0.14, misc:0.12, friends:0.12, events:0.10, activist:0.06, youtube:0.05, forums:0.03, fellowships:0.02, movies:0.01, protests:0.01 },
+    bucketWeights: { policy:0.60, generalist:0.12, comms:0.10, research:0.08, ops:0.05, scalers:0.05 },
   },
   {
-    id: 'other',
-    label: 'Mid-career: Other',
-    color: '#839099',
-    weight: 0.05,
-    description: 'Lawyers, doctors, social scientists, and more. Often self-directed; the pipeline offers little targeted support.',
-    funnelWeights: { friends:0.26, misc:0.18, movies:0.13, activist:0.13, events:0.12, youtube:0.09, blogs:0.04, university:0.04, conferences:0.01, lesswrong:0.00, fellowships:0.00, protests:0.00 },
-    bucketWeights: { generalist:0.35, policy:0.25, research:0.20, comms:0.15, infosec:0.05 },
+    id: 'research', label: 'Mid-career: Research', color: '#4F6E8C', weight: 0.08,
+    description: PERSON_PROMPT,
+    funnelWeights: { conferences:0.24, blogs:0.16, fellowships:0.10, books:0.10, friends:0.12, forums:0.08, misc:0.08, youtube:0.05, events:0.05, university:0.01, activist:0.005, movies:0.005 },
+    bucketWeights: { research:0.55, policy:0.15, generalist:0.12, ops:0.08, scalers:0.05, comms:0.05 },
+  },
+  {
+    id: 'mgmt', label: 'Mid-career: Management', color: '#8FA3B8', weight: 0.07,
+    description: PERSON_PROMPT,
+    funnelWeights: { friends:0.18, misc:0.16, books:0.14, events:0.12, conferences:0.12, movies:0.08, youtube:0.08, blogs:0.06, activist:0.04, protests:0.01, forums:0.01 },
+    bucketWeights: { scalers:0.40, ops:0.30, generalist:0.20, policy:0.05, comms:0.05 },
+  },
+  {
+    id: 'other', label: 'Mid-career: Other', color: '#839099', weight: 0.06,
+    description: PERSON_PROMPT,
+    funnelWeights: { friends:0.20, misc:0.16, movies:0.12, youtube:0.12, events:0.12, activist:0.10, books:0.08, blogs:0.04, protests:0.03, forums:0.02, conferences:0.01 },
+    bucketWeights: { generalist:0.30, ops:0.25, comms:0.15, policy:0.15, scalers:0.10, research:0.05 },
   },
 ];
 
 // ── Entry channels: each rendered as its own mini-funnel ─────
 const ENTRY_CHANNELS = [
   {
-    id: 'youtube', label: 'YouTube', fullLabel: 'YouTube Videos',
-    examples: 'Rob Miles · AI in Context · Bentham\'s Bulldog · Scott Alexander (readings)',
-    description: 'AI safety YouTube reaches large audiences — but conversion to sustained engagement is very low.',
+    id: 'youtube', label: 'YouTube/Podcasts', fullLabel: 'YouTube Videos and Podcasts',
+    examples: 'AI in Context · Rob Miles · Rational Animations · Dwarkesh Patel · TED Talks · 80,000 Hours · other news sources covering AI safety material',
   },
   {
-    id: 'blogs', label: 'Blogs', fullLabel: 'Blog Posts',
-    examples: 'Alignment Forum · Slate Star Codex · Cold Takes · Paul Christiano',
-    description: 'Long-form blog content reaches technically literate readers who engage deeply.',
+    id: 'misc', label: 'Web / Social', fullLabel: 'Various Internet Sources / Social Media',
+    examples: 'AI Futures Project · Twitter · Reddit · LinkedIn · news articles · newsletters',
   },
   {
-    id: 'lesswrong', label: 'LW / HPMOR', fullLabel: 'LessWrong / HPMOR',
-    examples: 'LessWrong · Harry Potter and the Methods of Rationality · rationalist ecosystem',
-    description: 'The rationalist community is a major gateway — but has significant cultural barriers.',
+    id: 'movies', label: 'Screenings', fullLabel: 'Movie and Documentary Screenings',
+    examples: 'The AI Doc: Or How I Became an Apocaloptimist · hopefully more coming soon',
   },
   {
-    id: 'misc', label: 'Web / Social', fullLabel: 'Miscellaneous Internet',
-    examples: 'Twitter/X · Reddit · news articles · LinkedIn · newsletters',
-    description: 'Social media creates brief awareness spikes — rarely leading to sustained engagement.',
+    id: 'books', label: 'Books', fullLabel: 'Books',
+    examples: 'Eliezer Yudkowsky · Peter Singer · Will MacAskill · Toby Ord',
   },
   {
-    id: 'university', label: 'Uni Groups', fullLabel: 'University EA / AI Safety Groups',
-    examples: 'AISF · Cambridge AI Safety Society · student-run EA chapters',
-    description: 'University groups are among the most effective pathways — but quality varies wildly.',
+    id: 'blogs', label: 'Blogs', fullLabel: 'Blogs',
+    examples: 'Bentham’s Bulldog · Scott Alexander · Ozy Brennan · Andy Masley · Matt Yglesias · Nate Silver · Cate Hall',
   },
   {
-    id: 'fellowships', label: 'Fellowships', fullLabel: 'Fellowship Applications & Offers',
-    examples: 'MATS · ARENA · BlueDot Impact · AISF Introductory Program',
-    description: 'Fellowships actively recruit — but high rejection rates filter many promising candidates.',
-  },
-  {
-    id: 'friends', label: 'Friends', fullLabel: 'Friend Recommendations',
-    examples: 'Personal introductions · peer-to-peer sharing · community members',
-    description: 'Word-of-mouth is the highest-quality conversion pathway — but inherently limited in scale.',
+    id: 'forums', label: 'Forums', fullLabel: 'Forums',
+    examples: 'EA Forum · LessWrong',
   },
   {
     id: 'activist', label: 'Activism', fullLabel: 'Adjacent Activist Groups',
-    examples: 'PauseAI · tech ethics groups · digital rights crossover · Stop Killer Robots',
-    description: 'Adjacent movements bring people in, but their theory of change may diverge.',
+    examples: 'Adjacent EA groups · animal welfare groups · Abundance · anti-surveillance groups',
   },
   {
-    id: 'movies', label: 'Screenings', fullLabel: 'Movie Screenings',
-    examples: '"We Need to Talk About AI" screenings · documentary nights',
-    description: 'High emotional impact but low sustained engagement without strong follow-up structure.',
+    id: 'protests', label: 'Protests', fullLabel: 'Anti-AI Protest Events',
+    examples: 'QuitGPT · AI Moratorium Coalition · PauseAI · anti-data center groups',
   },
   {
-    id: 'events', label: 'Local Events', fullLabel: 'Local Events & Meetups',
-    examples: 'Meetups · panels · hackathons · discussion nights',
-    description: 'Casual local events create light first contact, but rarely give a next step toward deeper involvement.',
+    id: 'university', label: 'Uni Groups', fullLabel: 'University Groups',
+    examples: 'Effective Altruism and AI Safety groups',
   },
   {
-    id: 'conferences', label: 'Conferences', fullLabel: 'AI Conferences / Safety Days',
-    examples: 'NeurIPS safety workshops · ICLR · GovAI events · ML Safety days',
-    description: 'Reaches technical professionals — but safety tracks are often marginalized.',
+    id: 'fellowships', label: 'Fellowships', fullLabel: 'Fellowships',
+    examples: 'Non-Trivial · Leaf · SPAR · ARENA · BlueDot',
   },
   {
-    id: 'protests', label: 'Protests', fullLabel: 'AI Safety Protests',
-    examples: 'Protest marches · public demonstrations · open letters',
-    description: 'Growing tactic, but framing often mismatches the technical-research-focused pipeline.',
+    id: 'friends', label: 'Friends', fullLabel: 'Recommendations from Friends',
+    examples: 'Direct relationships with people in EA · peer-to-peer outreach',
+  },
+  {
+    id: 'conferences', label: 'Conferences', fullLabel: 'Conferences Related to AI Safety',
+    examples: 'NeurIPS safety workshops · GovAI events · ML Safety days',
+  },
+  {
+    id: 'events', label: 'Local Events', fullLabel: 'Local Events and Meetups',
+    examples: 'Hackathons · meetups · panels · discussion nights',
   },
 ];
 
-// ── Caring-stage sub-paths (three columns) ────────────────────
-const CARING_PATHS = [
-  { label: 'Organizing', items: ['Running a local EA/AI Safety group', 'Campus chapter leadership', 'Event hosting'] },
-  { label: 'Events', items: ['EAG', 'Action Potential', 'GCP', 'The Curve', 'Control Conference', 'Uni retreats'] },
-  { label: 'Communities', items: ['EA/AIS groups', 'Dedicated blogs', 'Friend networks', '80,000 Hours'] },
-];
-
-// ── Upskilling items, split by barrier to entry ───────────────
-const EASY_UPSKILLING = ['BlueDot Impact courses', 'Career transition grants', 'Fieldbuilder / incubation weeks', 'Contractor / intern roles'];
-const HARD_UPSKILLING = ['Research fellowships (MATS, ARENA)', 'Generator Residency', 'Tarbell Fellowship', 'Genstream (LISA)'];
-const JOB_DECISION_ITEMS = ['Discussions with mentors', '80,000 Hours advising', 'Career guides by role', 'Org direct outreach'];
-
-// ── Which entry channels share a failure mode (and so share one pipe
-// down to tank1, rather than each getting its own) ───────────────
+// ── Which entry channels belong to the same funnel category from the
+// post (and so share one pipe down to tank1, rather than each getting
+// its own) ───────────────────────────────────────────────────────
 const FUNNEL_GROUPS = [
-  { id: 'no_followup', channelIds: ['youtube', 'misc', 'movies', 'events'] },
-  { id: 'blogs_solo', channelIds: ['blogs'] },
-  { id: 'culture_mismatch', channelIds: ['lesswrong', 'activist', 'protests'] },
-  { id: 'university_solo', channelIds: ['university'] },
-  { id: 'fellowships_solo', channelIds: ['fellowships'] },
-  { id: 'friends_solo', channelIds: ['friends'] },
-  { id: 'conferences_solo', channelIds: ['conferences'] },
+  { id: 'media', label: 'STANDARD MEDIA OUTREACH', channelIds: ['youtube', 'misc', 'movies', 'books'] },
+  { id: 'internet', label: 'AI SAFETY & ADJACENT INTERNET CULTURES', channelIds: ['blogs', 'forums'] },
+  { id: 'activism', label: 'ADJACENT ACTIVIST GROUPS & PROTESTS', channelIds: ['activist', 'protests'] },
+  { id: 'university', label: 'UNIVERSITY GROUPS', channelIds: ['university'] },
+  { id: 'fellowships', label: 'FELLOWSHIPS', channelIds: ['fellowships'] },
+  { id: 'friends', label: 'RECOMMENDATIONS FROM FRIENDS', channelIds: ['friends'] },
+  { id: 'events', label: 'EVENTS', channelIds: ['conferences', 'events'] },
 ];
 
+// escapeRate/fixedEscapeRate are simulation tuning only (probability a
+// droplet leaks at this checkpoint, before/after the fix is applied) —
+// the post doesn't quantify these. noFix marks entries the post raises
+// without proposing a fix; clicking them doesn't toggle anything.
 const LEAKS = [
-  // ── Entry-channel leaks. Channels that share the same underlying
-  // failure mode share one leak (and, per the layout, one downstream
-  // pipe) rather than each getting a separate diagnosis. ──
+  // ── Entry-funnel leaks ──
   {
-    id:'no_followup_path', stage:'funnel', channels:['youtube','misc','movies','events'],
-    title: 'No Clear Next Step After Initial Exposure',
-    escapeRate: 0.76, fixedEscapeRate: 0.56, fixed: false,
-    problem: 'YouTube videos, social media buzz, movie screenings, and local meetups all create a spark of interest — but none of them reliably hand people a next step. Viewers and attendees are engaged in the moment, but with no obvious path to community or action, most drift away within days.',
-    solution: 'PARTIAL FIX: More creators and organizers now add explicit calls-to-action — links to AISF, 80,000 Hours guides, local group finders, and post-event mailing lists. Still reaches only a fraction of the people who pass through.',
-    impactNote: 'Small improvement. Without dedicated follow-up infrastructure, this kind of casual spark of attention decays fast.',
+    id:'media_no_next_step', stage:'funnel', channels:['youtube','misc','movies','books'],
+    title: 'People Aren’t Told Where They Can Learn More',
+    escapeRate: 0.70, fixedEscapeRate: 0.50, fixed: false,
+    problem: 'Many people who hear about AI risks in these contexts become interested, but often, they aren’t told where they can learn more or who they can talk to if they want advice.',
+    solution: 'Reach out to people performing this type of outreach and ask them to advertise the next stages in the pipeline: link them to 80,000 Hours or other resources that can help them think about these things.',
   },
   {
-    id:'blog_overwhelm', stage:'funnel', channels:['blogs'],
-    title: 'Content Is Too Technical for Newcomers',
-    escapeRate: 0.60, fixedEscapeRate: 0.40, fixed: false,
-    problem: 'The Alignment Forum assumes significant ML and philosophy background. Curious newcomers read a post, feel overwhelmed and unqualified, and don\'t return.',
-    solution: 'PARTIAL FIX: AGI Safety Fundamentals reading sequences and beginner guides give structure. Still requires significant self-motivation without a community.',
-    impactNote: 'Moderate improvement for technically-minded readers. Less so for others.',
+    id:'internet_technical_language', stage:'funnel', channels:['blogs','forums'],
+    title: 'Highly Technical Language Intimidates Newcomers',
+    escapeRate: 0.55, fixedEscapeRate: 0.45, fixed: false,
+    problem: 'Mostly on forums: Highly technical language makes joining a community intimidating for newcomers.',
+    solution: 'I don’t think working on this is very tractable, actually, aside from recommending the EA Handbook to people.',
   },
   {
-    id:'culture_framing_mismatch', stage:'funnel', channels:['lesswrong','activist','protests'],
-    title: 'Culture and Framing Don\'t Match the Pipeline',
-    escapeRate: 0.73, fixedEscapeRate: 0.59, fixed: false,
-    problem: 'Rationalist/LessWrong spaces, adjacent activist movements, and protest culture each bring people in — but each has its own vocabulary, norms, and theory of change that often clash with the technical, multi-year career path the rest of the pipeline assumes. Newcomers who don\'t fit that mold often stay in their entry community rather than moving further in.',
-    solution: 'PARTIAL FIX: Newcomer guides, coalition-building events, and explicit acknowledgment that different roles and timelines are all needed help some people bridge the gap. Cultural change is slow.',
-    impactNote: 'Limited improvement. These are genuine worldview and framing differences, not just onboarding friction.',
+    id:'activism_culture', stage:'funnel', channels:['activist','protests'],
+    title: 'Community Norms Can Seem Intimidating and Weird to Outsiders',
+    escapeRate: 0.65, fixedEscapeRate: 0.52, fixed: false,
+    problem: 'The existing set of rules/resources we have for AI safety comes with an implicit set of social/cultural norms that can seem intimidating and weird to outsiders. As long as associated communities look intimidating and weird, it can be hard to support people interested in learning. Additionally, many of the people at protest events aren’t primarily concerned with extinction risks specifically.',
+    solution: 'Even if these protesters aren’t interested in becoming technical AI safety researchers, many people may be sympathetic to fighting for relevant solutions (democracy preservation, pauses on AI development, etc) outside of the main AI safety community. Even though these protest actions might not fill many conventional AI safety roles, they could help build the necessary political capital to pass important regulations, like slowdowns and safety checks for new models. Perhaps this should be its own, separate pipeline? I would like to see a full post that thinks about this in much more depth.',
   },
   {
-    id:'university_quality', stage:'funnel', channels:['university'],
-    title: 'Group Quality Is Highly Variable',
-    escapeRate: 0.45, fixedEscapeRate: 0.28, fixed: false,
-    problem: 'University AI safety groups range from highly organized programs with excellent curricula to semi-active chat groups that never run a session. Students in low-quality groups rarely progress further.',
-    solution: 'MODERATE FIX: AISF group support and dedicated campus organizer funding significantly improve quality at funded groups. Most campuses still lack this.',
-    impactNote: 'Meaningful improvement where resources are deployed — but most campuses go unsupported.',
+    id:'university_persistence', stage:'funnel', channels:['university'],
+    title: 'Groups Struggle to Begin, Stay Active, and Recruit New Leaders',
+    escapeRate: 0.45, fixedEscapeRate: 0.30, fixed: false,
+    problem: 'While there are a lot of resources to improve EA and AI Safety groups (see: OSP, Beacon, Pathfinder, and NEST), many groups struggle to begin, stay active, and recruit new leaders. This decreases the number and effectiveness of university groups.',
+    solution: 'Get more people to focus on seeding new university groups to expand the funnel, and try to make organizers of existing groups think more carefully about making sure their groups survive.',
   },
   {
     id:'fellowship_rejection', stage:'funnel', channels:['fellowships'],
-    title: 'High Rejection Rates Are Demoralizing',
-    escapeRate: 0.70, fixedEscapeRate: 0.55, fixed: false,
-    problem: 'Leading fellowship programs (MATS, ARENA, AISF) accept only 5–15% of applicants. Rejection with little feedback discourages reapplication and leaves people without alternative pathways.',
-    solution: 'PARTIAL FIX: More fellowship slots, structured rejection feedback, and explicit "what to do if rejected" resources help at the margins. Capacity is the fundamental bottleneck.',
-    impactNote: 'Small improvement without major, sustained funding increases for program expansion.',
-  },
-  {
-    id:'friend_recs_quality', stage:'funnel', channels:['friends'],
-    title: 'Word-of-Mouth Doesn\'t Scale',
-    escapeRate: 0.30, fixedEscapeRate: 0.22, fixed: false,
-    problem: 'Friend recommendations are the highest-quality pipeline entry — but they\'re limited to existing community social graphs. The people most likely to refer others are already in the community.',
-    solution: 'PARTIAL FIX: "Refer a friend" toolkits and shareable AI safety content give modest boosts to word-of-mouth.',
-    impactNote: 'Small scale improvement. High quality per referral remains unchanged.',
-  },
-  {
-    id:'conference_marginalization', stage:'funnel', channels:['conferences'],
-    title: 'Safety Tracks Feel Marginal',
-    escapeRate: 0.55, fixedEscapeRate: 0.38, fixed: false,
-    problem: 'At major AI conferences, safety workshops are seen as peripheral. Industry incentives dominate, and safety researchers often feel they\'re preaching to the unconverted in a side room.',
-    solution: 'MODERATE FIX: Dedicated safety-focused conferences (ML Safety days, GovAI events) create focused communities with much better follow-through than workshop tracks.',
-    impactNote: 'Meaningful improvement for technically-minded audiences attending dedicated events.',
-  },
-
-  // ── Caring stage leaks ──
-  {
-    id:'impostor_syndrome', stage:'caring',
-    title: 'Impostor Syndrome and Role Confusion',
-    escapeRate: 0.45, fixedEscapeRate: 0.30, fixed: false,
-    problem: 'Many people who care deeply about AI safety conclude they\'re not smart, technical, or credentialed enough to contribute. This is especially common among non-ML people, who see no clear role for themselves.',
-    solution: 'MODERATE FIX: Explicit messaging that operations, communications, policy, and generalist roles are urgently needed. Structured mentorship and "paths in" content help significantly for those who encounter it.',
-    impactNote: 'Meaningful improvement with targeted messaging and 1:1 advising access.',
-  },
-  {
-    id:'event_inaccessibility', stage:'caring',
-    title: 'Key Events Are Geographically Inaccessible',
-    escapeRate: 0.38, fixedEscapeRate: 0.25, fixed: false,
-    problem: 'EAG, GCP, Action Potential, and similar conferences are expensive to attend and concentrated in San Francisco, London, and Oxford — excluding promising people globally, especially in the Global South.',
-    solution: 'MODERATE FIX: More travel grants, virtual attendance options, and regional events reduce but don\'t eliminate this barrier. Geography and cost remain significant.',
-    impactNote: 'Meaningful improvement with dedicated travel grant funding. Gap remains large.',
-  },
-  {
-    id:'community_insularity', stage:'caring',
-    title: 'Community Feels Cliquish to Newcomers',
-    escapeRate: 0.38, fixedEscapeRate: 0.26, fixed: false,
-    problem: 'EA and AI safety communities, especially in-person, can feel like tight social graphs where outsiders struggle to build relationships quickly. Status dynamics and shared references are alienating.',
-    solution: 'PARTIAL FIX: Structured newcomer programs, welcome events, and buddy systems at conferences help at the margins. Culture shifts slowly.',
-    impactNote: 'Moderate improvement where explicitly invested in. Not a systemic fix.',
-  },
-  {
-    id:'unclear_next_steps_caring', stage:'caring',
-    title: 'No Clear Path from "Caring" to "Doing"',
-    escapeRate: 0.50, fixedEscapeRate: 0.33, fixed: false,
-    problem: 'After genuinely engaging with AI safety, many people stall. They don\'t know which role to pursue, what upskilling to do, whether to pivot careers, or how to make themselves useful to existing orgs.',
-    solution: 'SIGNIFICANT FIX: 80,000 Hours advising calls, structured career guides by role, and university group programming provide clarity. Most impact comes from 1:1 advising — but advising capacity is limited.',
-    impactNote: 'Significant improvement where advising resources are available. Capacity is the limit.',
-  },
-
-  // ── Tank leak: ongoing dwelling attrition straight out of "Really
-  // Starting to Care" itself, distinct from the conn1 pipe leaks above
-  // (which model specific named barriers on the way to tank2) — this one
-  // is just the fact that caring alone, with no specific external
-  // barrier, doesn't reliably sustain itself. Checked every frame while
-  // dwelling (a per-frame probability) rather than once at a path
-  // checkpoint, so it isn't run through the generic LEAK_SEVERITY scaling
-  // the checkpoint-style leaks use.
-  {
-    id:'quiet_disengagement', stage:'tank1',
-    title: 'Quiet Disengagement Sets In',
-    escapeRate: 0.007, fixedEscapeRate: 0.0035, fixed: false,
-    problem: 'Even with no specific external barrier, initial enthusiasm for AI safety often fades on its own within weeks — life gets busy, the initial spark isn\'t reinforced, and there\'s no active pull keeping someone engaged.',
-    solution: 'PARTIAL FIX: Regular touchpoints (newsletters, local groups, cohort-based programs) give people a reason to stay engaged even without a specific next step in mind yet.',
-    impactNote: 'Reduces drop-off meaningfully, but organic fade is hard to fully prevent.',
-  },
-
-  // ── Upskilling stage leaks ──
-  {
-    id:'program_capacity', stage:'upskilling',
-    title: 'Programs Are Severely Oversubscribed',
+    title: 'High Rejection Rates',
     escapeRate: 0.55, fixedEscapeRate: 0.40, fixed: false,
-    problem: 'MATS, ARENA, BlueDot Impact, and similar programs receive 10–30× more applicants than they can accept. Many rejected candidates don\'t find alternative pathways and leave the field.',
-    solution: 'PARTIAL FIX: Increased funding for program expansion helps, but quality is hard to scale quickly. Better "what to do if rejected" resources provide some recovery.',
-    impactNote: 'Limited improvement without major, sustained funding increases.',
+    problem: 'Fellowships often have high rejection rates, especially to people who are low-context on AI safety topics.',
+    solution: 'Fellowship rejection systems should offer participants ways to get interested and upskill more so that they are better applicants for future rounds. Many universities have systems to provide funding for students interested in doing this; we should make sure students know!',
   },
   {
-    id:'midcareer_blind_spot', stage:'upskilling',
-    title: 'Mid-Career Professionals Lack Support',
-    escapeRate: 0.65, fixedEscapeRate: 0.48, fixed: false,
-    problem: 'Career transition grants and upskilling programs are underadvertised to mid-career people, who also need different kinds of support: income replacement, schedule flexibility, and credentialing.',
-    solution: 'MODERATE FIX: Dedicated mid-career programs, outreach at professional conferences, part-time upskilling options, and income-bridging grants reduce the career-change cost meaningfully.',
-    impactNote: 'Meaningful improvement with targeted mid-career programming. Currently underinvested.',
+    id:'fellowship_nerdsnipe', stage:'funnel', channels:['fellowships'],
+    title: 'Some Intro Fellowships Fail to Excite and Motivate',
+    escapeRate: 0.40, fixedEscapeRate: 0.28, fixed: false,
+    problem: 'While intro fellowships can give valuable information to people, some fail to provide the exciting information and context that motivates a smart and passionate person to join EA/AI Safety. I think this delayed my personal introduction to AI safety by several months, which really sucks!',
+    solution: 'Fellowships could be designed to better “nerdsnipe” some of their participants with cool ideas. EA Purdue has had some success by adding readings like “Double Crux” into our Week 1 Intro Fellowship, instead of just the classic Scout Mindset video.',
   },
   {
-    id:'non_research_upskilling_gap', stage:'upskilling',
-    title: 'Non-Research Roles Have Almost No Programs',
-    escapeRate: 0.72, fixedEscapeRate: 0.55, fixed: false,
-    problem: 'Nearly all upskilling programs (BlueDot, MATS, ARENA) focus on ML researchers. Operations, communications, policy, and infosec professionals have almost no targeted options.',
-    solution: 'PARTIAL FIX: Tarbell Fellowship (policy), Genstream at LISA (various), and fieldbuilder incubation weeks are emerging. Still vastly underresourced vs. research programs.',
-    impactNote: 'Small improvement. The structural gap is large and persistent. More investment urgently needed.',
+    id:'friends_motivation', stage:'funnel', channels:['friends'],
+    title: 'Few Feel Motivated to Encourage Their Friends',
+    escapeRate: 0.30, fixedEscapeRate: 0.22, fixed: false,
+    problem: 'Not many people feel strongly motivated to encourage their friends to do more things in AI safety, and many people already in AI safety have few friends on the outside.',
+    solution: 'Motivate more people to be a “Noah Birnbaum”: someone who regularly reaches out to their friends, encourages them to try new things, and tells them about upcoming opportunities that they might not otherwise know about.',
+  },
+  // Events group ("Highly uncertain about whether there are leaks/what
+  // they are" in the post) intentionally carries no leak.
+
+  // ── Caring-stage leaks (on the pipes toward upskilling) ──
+  {
+    id:'events_attendance', stage:'caring',
+    title: 'Some People Might Never Make It to an Event',
+    escapeRate: 0.55, fixedEscapeRate: 0.38, fixed: false,
+    problem: 'While many people self-report getting lots of value from events, some people might never make it to one.',
+    solution: 'I think we should be thinking more carefully about why people don’t make it to events. However, one thing that may be helpful is to run more events for more diverse groups of people! Action Potential seems like it was really good, but it was limited in scope. How do we scale it up? Note: If you’re interested in running an event for any group of people, contact me at roman.alex.ross@gmail.com, and I’ll connect you to someone with relevant expertise who can help you see if you may be a good fit.',
+    impactNote: 'Note: The primary “theory of change” for many of these events isn’t solely to build talent pipelines. Much of their value comes from building political will, increasing people’s “surface area for luck,” and convincing important people that these issues are worth caring about.',
   },
   {
-    id:'mentor_access', stage:'upskilling',
-    title: 'Mentor Access Is Unevenly Distributed',
-    escapeRate: 0.45, fixedEscapeRate: 0.30, fixed: false,
-    problem: 'Well-connected people at top universities or with existing community ties get mentorship easily. Those without prior connections navigate alone and are far more likely to disengage.',
-    solution: 'MODERATE FIX: 80k Hours mentorship matching, structured group advising calls, and AI safety career advisors embedded at more universities significantly democratize access.',
-    impactNote: 'Meaningful improvement with structured mentorship infrastructure.',
+    id:'advising_quality', stage:'caring',
+    title: 'Career Advising Can Fail to Be Helpful Enough',
+    escapeRate: 0.55, fixedEscapeRate: 0.40, fixed: false,
+    problem: 'While it’s important for a lot of career advising to be personalized, it may often fail to meet a certain level of helpfulness. For example, I have friends who were delayed from learning more about AI safety because their BlueDot mentor didn’t give them good advice on where they could go next to gain more skills.',
+    solution: 'Raise the bar on helpfulness by providing common advising resources that can be used as a fallback by mentors.',
+  },
+  // "Other Communities" ("No tractable leaks immediately spotted" in the
+  // post) intentionally carries no leak.
+
+  // ── Upskilling-stage leaks ──
+  {
+    id:'program_cause_prio', stage:'upskilling',
+    title: 'Many Program Participants Don’t Prioritize Existential Risk',
+    escapeRate: 0.45, fixedEscapeRate: 0.35, fixed: false,
+    problem: 'Many people who end up accepted into many of these research programs don’t actually care that much about reducing existential risks, meaning that they may be less likely to take on highly impactful jobs if given the opportunity (for example, choosing to work at a lab over a research org). This is an inefficient use of mentor time and resources.',
+    solution: 'Dedicate sections of these programs to talking about why these risks are important to think about and prioritize. Explicit cause prioritization work can make participants understand why they should be trying to align AGI, rather than build it. Note: I’m quite uncertain about how valuable these types of programs are, or if they would even be a net-positive.',
+  },
+  {
+    id:'program_rejection', stage:'upskilling',
+    title: 'Rejected Applicants Feel Discouraged and Opt Out',
+    escapeRate: 0.50, fixedEscapeRate: 0.35, fixed: false,
+    problem: 'Low acceptance rates mean that many people who get rejected from various programs feel discouraged and opt out of applying for more.',
+    solution: 'Help direct people to the places where they should be applying first. If people tried applying for MATS with no other experience, they have little chance of getting in. Tell them to check out BlueDot, ARENA, and SPAR first. Note: Many programs already do this or something similar. But do all of them?',
+  },
+  {
+    id:'career_transition_uncertainty', stage:'upskilling', noFix: true,
+    title: 'Personal Uncertainty: Career Transitions',
+    escapeRate: 0.35, fixedEscapeRate: 0.35, fixed: false,
+    problem: 'Does everyone who want to pivot careers have an accessible path to doing so? Maybe they do, but if they don’t, what can we do about it?',
   },
 
-  // ── Job-stage leaks ──
+  // ── Job-decision leaks ──
   {
-    id:'generalist_pipeline_gap', stage:'jobs', bucket:'generalist',
-    title: 'No Pipeline for Generalist Leaders',
-    escapeRate: 0.82, fixedEscapeRate: 0.65, fixed: false,
-    problem: 'AI safety orgs desperately need operational leaders, chiefs of staff, program directors, and executive generalists — but the pipeline offers almost no targeted support for these roles. Most generalists pivot to research or leave.',
-    solution: 'PARTIAL FIX: Explicit generalist tracks at incubation programs and exec team building at growing AI safety orgs create some pipeline.',
-    impactNote: 'Large opportunity. One of the most critical current bottlenecks in the field.',
+    id:'fellowship_hopping', stage:'jobs', rail: true, noFix: true,
+    title: 'Fellowship Hopping',
+    escapeRate: 0.30, fixedEscapeRate: 0.30, fixed: false,
+    problem: 'Some people keep “fellowship hopping” instead of taking real, impactful jobs.',
+    impactNote: 'Note: The story behind fellowship hopping is a little confusing to me. Most of the time, the people doing the hopping are applying for jobs, but these jobs can be hard to get. I suspect that many of these people would be best off doing some amount of dedicated upskilling in a different direction than what the fellowships give them, but I’m not sure what the pipeline for this looks like or how good it currently is. Maybe research mentors recommend ways to improve?',
   },
   {
-    id:'comms_pipeline_gap', stage:'jobs', bucket:'comms',
-    title: 'Communications Professionals Are Never Reached',
-    escapeRate: 0.87, fixedEscapeRate: 0.72, fixed: false,
-    problem: 'PR, journalism, and communications professionals rarely encounter AI safety at all, and when they do, no structured pathway supports them into roles where their skills are desperately needed.',
-    solution: 'PARTIAL FIX: Targeted outreach at comms professional events and dedicated AI safety comms fellowships create a thin pipeline.',
-    impactNote: 'Large opportunity. Currently almost entirely neglected as a pipeline target.',
+    id:'generalist_unknown', stage:'jobs', bucket:'generalist',
+    title: 'Many People Don’t Know What a “Generalist” Is',
+    escapeRate: 0.60, fixedEscapeRate: 0.45, fixed: false,
+    problem: 'Amongst the more vague roles, many people don’t know what a “generalist” is, or that it’s something they should be doing.',
+    solution: 'Stories from successful generalists in AI safety explaining how they got into the field.',
   },
   {
-    id:'infosec_pipeline_gap', stage:'jobs', bucket:'infosec',
-    title: 'Security Professionals Aren\'t Recruited',
-    escapeRate: 0.83, fixedEscapeRate: 0.68, fixed: false,
-    problem: 'Information security professionals have directly applicable skills (red-teaming, adversarial thinking, threat modeling) but are almost never actively recruited or supported into AI safety roles.',
-    solution: 'PARTIAL FIX: AI safety messaging at security conferences, infosec-to-safety transition fellowships, and dedicated red-teaming roles at AI safety labs create initial pathways.',
-    impactNote: 'Large opportunity. Skills are directly applicable to AI security and red-teaming work.',
+    id:'policy_skills', stage:'jobs', bucket:'policy',
+    title: 'Many Don’t Learn the Skills Required to Be Highly Impactful',
+    escapeRate: 0.55, fixedEscapeRate: 0.40, fixed: false,
+    problem: 'Many people who want to go into policy don’t learn many of the skills required to be highly impactful.',
+    solution: 'Directly embed governance fellows into real, multistakeholder policy processes as part of their training, so they learn some of the important tacit knowledge required to succeed.',
+  },
+
+  // ── Informational markers on the undersupplied bucket branches. These
+  // carry no attrition of their own (escapeRate 0) — the actual thinning
+  // is CONFIG.BUCKET_SHORTFALL, which stays untouched so the flow of
+  // droplets reaching these buckets doesn't change. They exist to explain
+  // the visible drip: the people who could have filled these roles were
+  // lost long before this point. ──
+  {
+    id:'scalers_upstream', stage:'jobs', bucket:'scalers', noFix: true, tagLabel: 'Upstream Losses',
+    title: 'Most People Leaked Out Much Earlier',
+    escapeRate: 0, fixedEscapeRate: 0, fixed: false,
+    problem: 'Only a trickle arrives here — not because this branch itself leaks, but because most of the people who could have grown into org-scaling roles leaked out much earlier in the pipeline, long before choosing a job.',
+  },
+  {
+    id:'ops_upstream', stage:'jobs', bucket:'ops', noFix: true, tagLabel: 'Upstream Losses',
+    title: 'Most People Leaked Out Much Earlier',
+    escapeRate: 0, fixedEscapeRate: 0, fixed: false,
+    problem: 'Only a trickle arrives here — not because this branch itself leaks, but because most of the people who could have filled operations roles leaked out much earlier in the pipeline, long before choosing a job.',
+  },
+  {
+    id:'comms_upstream', stage:'jobs', bucket:'comms', noFix: true, tagLabel: 'Upstream Losses',
+    title: 'Most People Leaked Out Much Earlier',
+    escapeRate: 0, fixedEscapeRate: 0, fixed: false,
+    problem: 'Only a trickle arrives here — not because this branch itself leaks, but because most of the people who could have filled communications roles leaked out much earlier in the pipeline, long before choosing a job.',
   },
 ];
 
+// ── Job buckets: the six career paths, hover text = Theories of Change ──
 const JOB_BUCKETS = [
   {
-    id: 'research',
-    label: 'Technical Research',
-    color: '#5E7F9C',
-    pipelineStrength: 'STRONG',
-    demandSaturationPoint: 10,
-    baseMarginalImpact: 0.38,
-    theoryOfChange: 'Technical safety researchers identify failure modes, develop alignment techniques, and advance our understanding of how to build AI that reliably does what we want — directly reducing the odds that a future powerful system behaves in catastrophic, uncontrolled ways. Research is the single most in-demand skillset in AI safety job postings (~43%), especially in academia (~86%). But at AI labs specifically, where the most consequential deployment decisions get made, only ~37% of roles need it, and usually paired with policy or engineering. The pipeline here is strong and well-supplied; the field\'s most acute constraints increasingly lie elsewhere.',
+    id: 'research', label: 'Technical Research', color: '#5E7F9C',
+    theoryOfChange: 'Unless we have technical researchers to address the important problems in alignment, control, compute verification, and macrostrategy, we will have no hope of winning in a world where superintelligent AI can be easily built. However, there is an important difference between saying, “We need more good people to be doing technical research work,” and saying, “We need more people applying to technical research positions.” Impact in technical research is heavy-tailed, meaning that most of the impact comes from the top few percentiles of researchers. Because of this, it is somewhat unclear how impactful a marginal, 50th-percentile technical researcher is. Perhaps there are many technical researchers who should be working on other things instead.',
   },
   {
-    id: 'policy',
-    label: 'Policy & Governance',
-    color: '#7C93A8',
-    pipelineStrength: 'MODERATE',
-    demandSaturationPoint: 18,
-    baseMarginalImpact: 0.62,
-    theoryOfChange: 'AI policy professionals shape whether powerful AI gets developed and deployed under real safeguards — through legislation, international coordination, and advising the institutions that will make consequential calls under time pressure. Policy skills appear in roughly a quarter of AI safety postings, concentrated in public institutions (~55%) and NGOs (~30%). Existential risk from AI isn\'t purely a technical problem: it\'s also a coordination problem between labs, states, and the public that only policy work can address.',
+    id: 'policy', label: 'Policy & Governance', color: '#7C93A8',
+    theoryOfChange: 'If the US and other foreign governments cared about existential risks from AI and could regulate against them well, we could have a greater chance at making the future much better. Policy and governance people can fill this gap: lobbyists can lobby, policymakers can work to pass AI safety legislation, and talented people working in campaigns can support politicians who take existential threats from AI seriously.',
   },
   {
-    id: 'generalist',
-    label: 'Generalist Leadership',
-    color: '#97A3AE',
-    pipelineStrength: 'WEAK',
-    demandSaturationPoint: 35,
-    baseMarginalImpact: 0.95,
-    theoryOfChange: 'Every safety org needs people who can actually run it: hiring, fundraising, operations, and scaling the institutions doing the safety-relevant work. Leadership postings prioritize management (~52%) and operations (~36%) over research skills (needed in under 10% of these roles) — yet almost every AI-safety-specific training pipeline produces researchers, not operators. A safety org stalled on hiring a chief of staff is safety-relevant work not getting done, no matter how many aligned researchers exist.',
+    id: 'scalers', label: 'Org Scalers', color: '#97A3AE',
+    theoryOfChange: 'The skills required for someone to bring an organization from 0 people to 100 people are very different than the skills required for someone to bring an organization from 100 people to 1000 people. In the first stage, a manager leads by making good decisions themselves and knowing everyone personally, and the culture is built implicitly. In the second stage, the manager needs to lead a group of managers and ensure that they can be trusted to make good decisions about a company\'s strategy. This requires an enormous amount of difficult tacit knowledge, and in extreme cases, it can take decades of experience to get right. Unfortunately, AI safety lacks the time to train people to do this internally, and it struggles to recruit many of the mid-career people who could do this. Job titles include Chief Operating Officer, Chief of Staff, Chief Executive Officer, Talent Director/Recruiting Lead, and Program/Research Manager.',
   },
   {
-    id: 'comms',
-    label: 'Comms & Outreach',
-    color: '#A9958F',
-    pipelineStrength: 'VERY WEAK',
-    demandSaturationPoint: 40,
-    baseMarginalImpact: 0.97,
-    theoryOfChange: 'Communications professionals translate what\'s actually happening inside labs and safety research into terms journalists, policymakers, and the public can act on — shaping whether the world responds to AI risk with urgency or shrugs it off. Outreach skills show up in under 7% of AI safety postings, almost entirely at NGOs (~21%), with essentially none at labs or public institutions. A field that can\'t explain the risk it exists to prevent has a much harder time getting the attention, funding, and regulation needed to actually prevent it.',
+    id: 'ops', label: 'Operations', color: '#A9958F',
+    theoryOfChange: 'Operations people can serve as productivity multipliers for everyone else in the company. Some roles are “hard ops” and require in-depth technical expertise on a certain set of skills, such as legal or financial knowledge. Other roles are more “soft ops”, which require having a deep understanding of an organization, the people working at it, and its goals. Because soft ops requires so much context on the AI safety ecosystem and its goals, it is generally much more difficult to hire for than hard ops, meaning that it’s a tighter bottleneck in the AI safety ecosystem. Some examples of soft ops roles might include managing projects, creating more productive office spaces, assisting executives in the organization, managing hiring/human resources, and running events/conferences.',
   },
   {
-    id: 'infosec',
-    label: 'Information Security',
-    color: '#A9695F',
-    pipelineStrength: 'VERY WEAK',
-    demandSaturationPoint: 30,
-    baseMarginalImpact: 0.97,
-    theoryOfChange: 'InfoSec professionals protect against model theft, weight exfiltration, and adversarial attacks that could let dangerous capabilities leak out of controlled environments before safety measures are ready. This is the largest specific skill gap the data reveals: information security is needed in nearly half of AI-lab job postings (~49%) — the single highest concentration of any skillset at labs — yet it\'s barely represented in AI safety career advising or training pipelines. The skills are directly transferable from the existing infosec profession; almost nobody in that profession currently hears the case for making the move.',
+    id: 'generalist', label: 'Other Generalists', color: '#839099',
+    theoryOfChange: 'There are problems everywhere that need solving without clear directions on how they should be solved. If we want to implement a multilateral pause on AI development, we need more political capital. We need to build out a Chinese AI safety ecosystem. We need to convince people in the labs to care about safety concerns. Many of the solutions to these problems aren’t necessarily org-shaped, so it’s nice to have high-context generalist people who can step in and solve these problems. Generalist roles often overlap with operations and scaling roles. This category also might include founders and grantmakers.',
   },
+  {
+    id: 'comms', label: 'Communications', color: '#8C7F9C',
+    theoryOfChange: 'Succeeding in a communications role is difficult because it requires a lot of tacit knowledge that only comes from experience, meaning that it is difficult to hire for in AI safety. In practice, this looks like being able to make good judgments when faced with questions like the following: “Should we put out a statement or stay quiet?”, “Will people react well to this framing?”, or “How will journalists write stories about the information we gave them?”. They also need to have institutional knowledge: “Who actually drafts the language for this bill?”, “What does a journalist’s editor need to do to greenlight a piece”, or “Do I need to hear from a committee staffer or a member?”. Also, a lot of successful comms work requires existing, trusted relationships: policymakers need to know that you’re a reliable source, and journalists need to believe that you’re not wasting their time. Still, good comms are important for research orgs to convey the significance of their findings to the public and policymakers, the people who will make the important changes happen.',
+  },
+];
+
+// ── Hoverable info boxes: stage questions, recommended-project lists,
+// and the additional notes attached near the Technical Research bucket ──
+const INFO_BOXES = {
+  discovery_lost: {
+    tag: 'Pipeline Question', title: 'Who gets lost?',
+    body: 'At this point, people have only learned about AI safety to the extent that they’ve managed to stumble across it. YouTube videos, miscellaneous internet content, and discussion forums reach people who go to the internet for entertainment. Books, news articles, and some blogs reach people looking to participate in the “sophisticated” discourse. While university and high school students have plenty of time to consume fun AI safety content, many mid-career professionals with more “serious” hobbies may get fewer opportunities to think about these things. How do we address this? Primarily, anyone doing outreach should think carefully about who their target audience is and what they should do next. Additional books, conferences, and news articles might help push AI safety ideas into the mainstream, allowing mid-career professionals to get interested in learning more, with the hope of helping them pivot to an AI safety career.',
+  },
+  discovery_projects: {
+    tag: 'Recommended Projects', title: 'Projects that might be worth trying (in addition to fixing leaks)',
+    body: '• Bring AI safety representatives to more non-AI-safety conferences.\n• Create conferences dedicated to teaching mid-career professionals about AI risks.\n• Create “day in the life of an AI safety worker” short-form content targeted at ADSMs (Attention-Deficit STEM-Majors) to reach more people who may be interested in AI safety.\n• Bring QuitGPT groups to more cities and universities.\n• Motivate popular bloggers and journalists to write out more AI safety arguments, especially when they can do so with fresh arguments and perspectives. Do people spend enough time talking about AI and authoritarianism? I’m not sure, but maybe good things can happen here.\n• Double-check that every potential entry point to the pipeline recommends additional resources for people to learn more. We don’t expect everyone entering the pipeline to be a good fit to aim for a research or policy job, but we should make sure anyone who could be interested learns about resources like BlueDot.\n• University AI safety groups could advertise programs like SPAR, saying that they could provide the resources for anyone who wants a better shot at getting in.\n• Create a database of EA group alumni who can be contacted again about doing impactful things.\n• Run 80,000 Hours book tours at universities through university EA groups.\n• Get university faculty to advertise AI safety fellowships and programs.\n• Create shorter podcast episodes for people new to AI safety.',
+  },
+  caring_lost: {
+    tag: 'Pipeline Question', title: 'Who gets lost?',
+    body: 'While some are making good progress, continuing down the path can still be quite confusing for others, especially those without many friends interested in AI safety. Failing to attend events might be a continuous leakage point, and it’s worth investigating why some people never go to one.',
+  },
+  caring_faster: {
+    tag: 'Another Question', title: 'How can we make the process faster?',
+    body: 'A bunch of resources already exist in the pipeline, but maybe someone traveling through has various uncertainties slowing them down. Maybe something as simple as letting people know there’s a lot of money in AI safety would make them much more motivated to make it to the end? A lot of people have a default assumption that any work that does good will inherently come with a cut to salaries, but this isn’t necessarily the case, especially with the wave of cash flooding in.\n\nHere are some other pieces of information that, when dispersed, might speed up the pipeline:\n• Why we’re building out this pipeline so carefully (we care about impact and are worried that we have limited time)\n• Details about the intellectual history of EA and how we got here (to help people understand the culture that we’re situated within)\n• “There are real careers and job security in AI safety”\n• “You can just do things,” and “You can just do things NOW! Don’t wait for permission!”',
+  },
+  caring_projects: {
+    tag: 'Recommended Projects', title: 'Projects that might be worth trying (in addition to fixing leaks)',
+    body: '• Getting more people to motivate their friends to think about AI safety more and show them how they can get into it (Producing more “Noah Birnbaum”s). I will write a blog post about this.\n• A “retreat consultancy” org that centralizes advice about how to run good retreats and distributes it (see: Canopy Retreats and Skylark for more details).',
+  },
+  upskilling_missing: {
+    tag: 'Pipeline Question', title: 'What are we missing?',
+    body: 'For one reason or another, many of the candidates moving through the pipeline lack important skills and context. Mid-career professionals lack context on the AI safety space, and young people lack the skills and experience that the mid-career professionals have. Not many people take the time to develop a nuanced, big-picture strategy or learn how to “backchain” to determine the Theory of Change of an action. Many skills, such as communications, information security, and complex management, require years of technical practice to gain, and are hard to find in applicants who are willing to pivot into AI safety. But perhaps the hardest thing to hire for is finding people with those skills who also genuinely care about impact and will try carefully and earnestly to do good. In many places, “really caring” can mark the difference between someone good and someone great.',
+  },
+  upskilling_projects: {
+    tag: 'Recommended Projects', title: 'Projects that might be worth trying (in addition to fixing leaks)',
+    body: '• Sophie Kim is working on a grantmaking BlueDot course.\n• Some of my friends (anonymous) are working on trialing and scaling a “world model building bootcamp” for people to learn a wide range of strategy takes and relevant pieces of technical knowledge to succeed in AI safety.\n• I think an ARENA for broader strategy takes could be good. I have some thoughts about how this might look. (BlueDot struggled with this because it was hard to select good people for, hard to have clear deliverable outcomes, and there were some formatting issues. If someone is interested in pursuing this, they should look more into this.)\n• Make general tabletop exercise (TTX) resources to help scale up their usage.',
+  },
+  jobs_projects: {
+    tag: 'Recommended Projects', title: 'Projects that might be worth trying (in addition to fixing leaks)',
+    body: '• Creating more co-working spaces around the world, similar to Constellation (it’s hard for people to just fly to the Bay if they want to learn about AI safety in much more fidelity).',
+  },
+  note_infosec: {
+    tag: 'Additional Note', title: 'Information Security',
+    body: 'Many open research and software engineering jobs also wish that their hires had more information security skills, to the point that it shows up as a frequent ask on job boards. These skills seem generally scarce, though.',
+  },
+  note_compute: {
+    tag: 'Additional Note', title: 'Compute Verification',
+    body: 'Compute verification is important if we want to make a pause on AI development viable. It builds technology to monitor the types of activities data centers perform (training vs inference) by analyzing the data/metadata transmitted through their cables. When done well, it is able to detect if a model is being trained in secret, meaning that different countries will be able to trust that a pause is actually happening. The field of compute verification is very new, so it needs many roles to be filled. However, it might not be too hard to easily scale it up, compared to other roles where people entering need lots of context on AI safety macrostrategy (I am somewhat uncertain about this, though).',
+  },
+};
+
+// Which info-box chips sit beside each depth layer's heading.
+const STAGE_BOXES = {
+  discovery: [
+    { id: 'discovery_lost', label: 'Who gets lost?' },
+    { id: 'discovery_projects', label: 'Projects worth trying' },
+  ],
+  caring: [
+    { id: 'caring_lost', label: 'Who gets lost?' },
+    { id: 'caring_faster', label: 'How can we make it faster?' },
+    { id: 'caring_projects', label: 'Projects worth trying' },
+  ],
+  upskilling: [
+    { id: 'upskilling_missing', label: 'What are we missing?' },
+    { id: 'upskilling_projects', label: 'Projects worth trying' },
+  ],
+  jobs: [
+    { id: 'jobs_projects', label: 'Projects worth trying' },
+  ],
+};
+
+// Additional-note chips anchored near the Technical Research bucket.
+const NOTE_BADGES = [
+  { id: 'note_infosec', label: 'Additional Note: InfoSec' },
+  { id: 'note_compute', label: 'Additional Note: Compute Verification' },
 ];

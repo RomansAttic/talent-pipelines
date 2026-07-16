@@ -102,8 +102,12 @@ class Particle {
     this.x += (ch.centerX - this.x) * 0.12;
 
     if (this.y >= ch.bottom) {
-      const leak = leaks.find(l => l.stage === 'funnel' && l.channels.includes(ch.id));
-      const marks = leak ? [{ dist: ch.leakMarkDist, leak }] : [];
+      // A channel's category can carry several leaks (e.g. Fellowships) —
+      // ch.leakMarkDists holds one checkpoint distance per leak, in the
+      // same order the layout spaced their marks along the shared trunk.
+      const groupLeaks = leaks.filter(l => l.stage === 'funnel' && l.channels.includes(ch.id));
+      const marks = groupLeaks.map((leak, i) => ({ dist: ch.leakMarkDists[i], leak }))
+        .filter(m => m.dist !== undefined);
       this.x = ch.centerX;
       this.y = ch.bottom;
       this._startFollow(ch.path, marks, 'tank1');
@@ -305,6 +309,25 @@ class Particle {
         .filter(m => m.leak);
       const jobLeak = leaks.find(l => l.stage === 'jobs' && l.bucket === this.targetBucket);
       if (jobLeak) marks.push({ dist: layout.conn2.len + railLegLen + branchLen * 0.5, leak: jobLeak });
+      // The rail-wide job-decision leak (fellowship hopping) sits on the
+      // distribution rail before the first bucket, so every droplet passes
+      // its checkpoint on the way to whichever bucket it chose.
+      const railLeak = leaks.find(l => l.stage === 'jobs' && l.rail);
+      if (railLeak && layout.railLeakX > laneX) {
+        marks.push({ dist: layout.conn2.len + (layout.railLeakX - laneX), leak: railLeak });
+      }
+      // Invisible supply-gap attrition on undersupplied bucket branches —
+      // the field simply fails to deliver most people into these paths, so
+      // droplets drip out of the branch with no clickable marker. Rates in
+      // CONFIG.BUCKET_SHORTFALL are tuned for ~1 arrival per 20 reaching
+      // Technical Research.
+      // Placed at the same branch depth as the bucket's drawn leak marker
+      // (0.5), so the visible drip exits right where the marker explains it.
+      const shortfall = CONFIG.BUCKET_SHORTFALL[this.targetBucket];
+      if (shortfall) {
+        marks.push({ dist: layout.conn2.len + railLegLen + branchLen * 0.5,
+          leak: { stage: 'shortfall', escapeRate: shortfall, fixedEscapeRate: shortfall, fixed: false } });
+      }
 
       const path = [
         lane.path[0], lane.path[1],

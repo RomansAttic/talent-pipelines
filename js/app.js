@@ -2,9 +2,10 @@
 
 (function () {
   // ── State ──────────────────────────────────────────────────
-  let page = 'title';                // 'title' | 'pipeline'
+  let page = 'title';                // 'title' | 'pipeline' | 'howto' | 'concerns'
   let titleCanvas, tCtx;
   let pipeCanvas, pCtx;
+  let wrapEl  = null;
   let layout  = null;
   let leaks   = null;               // working copy (modified on fix/toggle)
   let particles  = [];
@@ -15,15 +16,19 @@
   let lastSpawn  = 0;
   let mouseX = 0, mouseY = 0;
   let mouseInCanvas = false;
-  let layerHoverAlpha = { discovery: 0, caring: 0, upskilling: 0, jobs: 0 };
+  // Layer descriptions fade in while the cursor is anywhere within that
+  // band's vertical range, and fade back out when it leaves.
+  let layerAlpha = {};
   let hoveredParticle = null;
   let hoveredChannelIdx = null;     // entry-channel hovered
   let leakHitZones    = [];         // rebuilt each frame
   let infoHitZones     = [];        // rebuilt each frame
   let selectedLeak    = null;
-  let hoveredInfoId    = null;       // id of the tank/bucket currently shown in the info panel via hover
+  let hoveredInfoId    = null;       // id of the bucket/info box currently shown in the panel via hover
   let mouseOverPanel   = false;      // true while the cursor is over the panel DOM itself
   let titleReady = false;
+
+  const PAGE_IDS = { title: 'title-page', pipeline: 'pipeline-page', howto: 'howto-page', concerns: 'concerns-page', thanks: 'thanks-page' };
 
   // ── Init ───────────────────────────────────────────────────
   function init() {
@@ -49,6 +54,32 @@
       } else {
         resizeTitleCanvas();
       }
+    }
+  }
+
+  // ── Page navigation ────────────────────────────────────────
+  function showPage(name) {
+    Object.values(PAGE_IDS).forEach(id => document.getElementById(id).classList.remove('active'));
+    document.getElementById(PAGE_IDS[name]).classList.add('active');
+
+    if (titleRaf) { cancelAnimationFrame(titleRaf); titleRaf = null; }
+    if (raf)      { cancelAnimationFrame(raf); raf = null; }
+    page = name;
+
+    if (name !== 'pipeline') {
+      hideLeakPanel();
+      particles = [];
+      JOB_BUCKETS.forEach(b => { bucketCounts[b.id] = 0; });
+    }
+
+    if (name === 'title') {
+      if (window.innerWidth >= 1100) {
+        if (!titleReady) initTitle();
+        else titleRaf = requestAnimationFrame(animateTitle);
+      }
+    } else if (name === 'pipeline') {
+      // Let the page transition start before sizing/painting the canvas.
+      setTimeout(initPipeline, 60);
     }
   }
 
@@ -108,6 +139,7 @@
   function initPipeline() {
     pipeCanvas = document.getElementById('pipeline-canvas');
     pCtx = pipeCanvas.getContext('2d');
+    wrapEl = document.getElementById('pipeline-wrap');
 
     // Leave a little room for #pipeline-wrap's own vertical scrollbar so
     // a viewport-width canvas doesn't itself trigger horizontal scrolling.
@@ -120,8 +152,8 @@
     pipeCanvas.style.width  = layout.width  + 'px';
     pipeCanvas.style.height = layout.height + 'px';
 
-    buildLegend();
     particles  = [];
+    layerAlpha = { discovery: 0, caring: 0, upskilling: 0, jobs: 0 };
     JOB_BUCKETS.forEach(b => {
       bucketCounts[b.id] = 0;
       const bl = layout.buckets[b.id];
@@ -129,17 +161,6 @@
     });
     lastSpawn  = performance.now();
     raf = requestAnimationFrame(animatePipeline);
-  }
-
-  function buildLegend() {
-    const el = document.getElementById('header-legend');
-    el.innerHTML = '';
-    PERSON_TYPES.forEach(t => {
-      const d = document.createElement('div');
-      d.className = 'legend-item';
-      d.innerHTML = `<span class="legend-dot" style="background:${t.color}"></span><span>${t.label}</span>`;
-      el.appendChild(d);
-    });
   }
 
   function animatePipeline(now) {
@@ -154,11 +175,11 @@
     // description only fades in while the cursor is somewhere within its
     // vertical range, regardless of x.
     const hoveredLayerId = mouseInCanvas ? _layerIdAt(mouseY, layout) : null;
-    Object.keys(layerHoverAlpha).forEach(id => {
+    Object.keys(layerAlpha).forEach(id => {
       const target = id === hoveredLayerId ? 1 : 0;
-      layerHoverAlpha[id] += (target - layerHoverAlpha[id]) * 0.08;
+      layerAlpha[id] += (target - layerAlpha[id]) * 0.08;
     });
-    _drawBackgroundLayers(pCtx, layout, layerHoverAlpha);
+    _drawBackgroundLayers(pCtx, layout, layerAlpha);
 
     leakHitZones = [];
     infoHitZones = [];
@@ -214,7 +235,7 @@
     // whatever happens to be falling through that spot.
     _drawEntryChannelLabels(pCtx, layout);
 
-    // Independent of hoveredParticle for the same reason as the leak/tank
+    // Independent of hoveredParticle for the same reason as the leak/info
     // panel below — funnels are full of falling droplets, so gating this
     // on "no particle currently hovered" silently blocked the channel
     // tooltip most of the time, especially when moving the mouse quickly.
@@ -241,10 +262,10 @@
     // Independent of hoveredParticle: tanks are full of floating droplets,
     // so gating this on "no particle currently hovered" meant the cursor
     // coinciding with any one of them (very likely, moving fast or slow)
-    // silently blocked the tank/leak panel from ever appearing.
+    // silently blocked the leak/info panel from ever appearing.
     const hitLeak = _findLeakAt(mouseX, mouseY);
     const hitZone = hitLeak ? null : _findInfoZoneAt(mouseX, mouseY);
-    _updateInfoPanelHover(hitLeak, hitZone ? hitZone.id : null);
+    _updateInfoPanelHover(hitLeak, hitZone);
 
     raf = requestAnimationFrame(animatePipeline);
   }
@@ -252,10 +273,11 @@
   // Which depth layer a given canvas y-coordinate falls in — x doesn't
   // matter, the layers are full-width bands.
   function _layerIdAt(y, layout) {
-    if (y < layout.tank1.bottom) return 'discovery';
-    if (y < layout.tank2.bottom) return 'caring';
-    if (y < layout.distribRailY) return 'upskilling';
-    return 'jobs';
+    const b = layout.layerBounds;
+    for (let i = 0; i < PIPELINE_LAYERS.length; i++) {
+      if (y < b[i + 1]) return PIPELINE_LAYERS[i].id;
+    }
+    return PIPELINE_LAYERS[PIPELINE_LAYERS.length - 1].id;
   }
 
   // ── Particle spawning ──────────────────────────────────────
@@ -313,26 +335,13 @@
 
   // ── Events ─────────────────────────────────────────────────
   function wireEvents() {
-    document.getElementById('start-btn').addEventListener('click', () => {
-      page = 'pipeline';
-      document.getElementById('title-page').classList.remove('active');
-      document.getElementById('pipeline-page').classList.add('active');
-      if (titleRaf) cancelAnimationFrame(titleRaf);
-      setTimeout(initPipeline, 60);
-    });
-
-    document.getElementById('back-btn').addEventListener('click', () => {
-      page = 'title';
-      document.getElementById('pipeline-page').classList.remove('active');
-      document.getElementById('title-page').classList.add('active');
-      if (raf) cancelAnimationFrame(raf);
-      hideLeakPanel();
-      particles = [];
-      JOB_BUCKETS.forEach(b => { bucketCounts[b.id] = 0; });
-      if (window.innerWidth >= 1100) {
-        if (!titleReady) initTitle();
-        else titleRaf = requestAnimationFrame(animateTitle);
-      }
+    document.getElementById('start-btn').addEventListener('click', () => showPage('pipeline'));
+    document.getElementById('back-btn').addEventListener('click', () => showPage('title'));
+    document.getElementById('howto-btn').addEventListener('click', () => showPage('howto'));
+    document.getElementById('concerns-btn').addEventListener('click', () => showPage('concerns'));
+    document.getElementById('thanks-btn').addEventListener('click', () => showPage('thanks'));
+    document.querySelectorAll('.text-back-btn').forEach(btn => {
+      btn.addEventListener('click', () => showPage('title'));
     });
 
     const wrap = document.getElementById('pipeline-wrap');
@@ -346,14 +355,15 @@
     wrap.addEventListener('mouseleave', () => { mouseInCanvas = false; });
 
     // Clicking a leak indicator toggles its fixed state directly — the
-    // panel is purely informational now, with no button of its own.
+    // panel is purely informational, with no button of its own. Leaks the
+    // post raises without proposing a fix (noFix) never toggle.
     wrap.addEventListener('click', e => {
       if (page !== 'pipeline' || !pipeCanvas) return;
       const rect = pipeCanvas.getBoundingClientRect();
       const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
       const hitLeak = _findLeakAt(cx, cy);
       if (hitLeak) {
-        hitLeak.fixed = !hitLeak.fixed;
+        if (!hitLeak.noFix) hitLeak.fixed = !hitLeak.fixed;
         showLeakPanel(hitLeak);
       }
     });
@@ -367,13 +377,13 @@
 
   // Info panels are hover-driven: called every frame with whatever the
   // cursor is currently over (at most one of the two is non-null).
-  function _updateInfoPanelHover(hitLeak, hitZoneId) {
+  function _updateInfoPanelHover(hitLeak, hitZone) {
     if (hitLeak) {
       hoveredInfoId = null;
       if (selectedLeak !== hitLeak) showLeakPanel(hitLeak);
-    } else if (hitZoneId) {
-      if (hoveredInfoId !== hitZoneId || selectedLeak) { selectedLeak = null; showInfoPanel(hitZoneId); }
-      hoveredInfoId = hitZoneId;
+    } else if (hitZone) {
+      if (hoveredInfoId !== hitZone.id || selectedLeak) { selectedLeak = null; showInfoPanel(hitZone); }
+      hoveredInfoId = hitZone.id;
     } else if (!mouseOverPanel && (selectedLeak || hoveredInfoId)) {
       selectedLeak = null;
       hoveredInfoId = null;
@@ -397,19 +407,31 @@
     return null;
   }
 
-  // ── Leak panel ─────────────────────────────────────────────
+  // ── Side panel ─────────────────────────────────────────────
+  function _setPanelTag(text, isLeak) {
+    const tag = document.getElementById('leak-tag');
+    tag.textContent = text;
+    tag.classList.toggle('tag-info', !isLeak);
+  }
+
   function showLeakPanel(leak) {
     selectedLeak = leak;
-    document.getElementById('leak-tag').textContent = 'Pipeline Leak';
+    _setPanelTag(leak.tagLabel || (leak.noFix ? 'Potential Leak' : 'Pipeline Leak'), true);
     document.getElementById('leak-title').textContent    = leak.title;
     document.getElementById('leak-problem').textContent  = leak.problem;
-    document.getElementById('leak-solution').textContent = leak.solution;
-    document.getElementById('leak-impact').textContent   = leak.impactNote;
+    document.getElementById('leak-solution').textContent = leak.solution || '';
 
     const wrap = document.getElementById('leak-solution-wrap');
     const hint = document.getElementById('leak-hint');
+    const impact = document.getElementById('leak-impact');
 
-    if (leak.fixed) {
+    impact.textContent = leak.impactNote || '';
+    impact.classList.toggle('hidden', !leak.impactNote);
+
+    if (leak.noFix) {
+      wrap.classList.add('hidden');
+      hint.textContent = '';
+    } else if (leak.fixed) {
       wrap.classList.remove('hidden');
       hint.textContent = 'Click the leak again to reopen it.';
     } else {
@@ -420,16 +442,27 @@
     _openPanel();
   }
 
-  function showInfoPanel(id) {
+  function showInfoPanel(zone) {
     selectedLeak = null;
     document.getElementById('leak-solution-wrap').classList.add('hidden');
     document.getElementById('leak-hint').textContent = '';
+    const impact = document.getElementById('leak-impact');
+    impact.textContent = '';
+    impact.classList.add('hidden');
 
-    const bucket = JOB_BUCKETS.find(b => b.id === id);
-    if (!bucket) return;
-    document.getElementById('leak-tag').textContent = 'Career Path';
-    document.getElementById('leak-title').textContent = bucket.label;
-    document.getElementById('leak-problem').textContent = bucket.theoryOfChange;
+    if (zone.kind === 'bucket') {
+      const bucket = JOB_BUCKETS.find(b => b.id === zone.id);
+      if (!bucket) return;
+      _setPanelTag('Theory of Change', false);
+      document.getElementById('leak-title').textContent = bucket.label;
+      document.getElementById('leak-problem').textContent = bucket.theoryOfChange;
+    } else {
+      const box = INFO_BOXES[zone.id];
+      if (!box) return;
+      _setPanelTag(box.tag, false);
+      document.getElementById('leak-title').textContent = box.title;
+      document.getElementById('leak-problem').textContent = box.body;
+    }
 
     _openPanel();
   }

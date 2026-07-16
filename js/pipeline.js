@@ -1,17 +1,23 @@
 // js/pipeline.js — Layout computation and all canvas drawing
 //
-// Entry funnels are stacked in a compact column to the left of tank1, each
-// at its own row height, and lead in sideways through a constant-diameter
-// pipe. Every connection between major tanks is 3 parallel pipes. Pipes
-// are drawn as a 3-tone banded tube with flange rings at joints for a
-// cartoonish plumbing look. Leaks are tick marks crossing a pipe wall at
-// a specific point.
+// Entry funnels are stacked in a compact column to the left of tank1, one
+// row per funnel category from the post, and lead in sideways through a
+// constant-diameter pipe. Every connection between major tanks is 3
+// parallel pipes. Pipes are drawn as a 3-tone banded tube with flange
+// rings at joints for a cartoonish plumbing look. Leaks are tick marks
+// crossing a pipe wall at a specific point; a category with several leaks
+// gets several marks spaced out along its shared trunk.
+
+// How wide each layer's description paragraph wraps, per layer index.
+// Caring gets extra width because its description is the longest and its
+// band (set by tank2's height) is comparatively short.
+const LAYER_DESC_W = [340, 400, 340, 340];
 
 // ── Layout ───────────────────────────────────────────────────
 function computeLayout(canvasWidth) {
   // ── Entry-channel column: one row per GROUP of channels that share a
-  //    failure mode. Grouped channels cluster their funnel mouths side by
-  //    side and converge into a single shared pipe, instead of every
+  //    funnel category. Grouped channels cluster their funnel mouths side
+  //    by side and converge into a single shared pipe, instead of every
   //    channel getting its own independent pipe (which reads as clutter). ──
   const funnelH = 24, rowH = 110;
   const chPipeW = CONFIG.CHANNEL_PIPE_WIDTH;
@@ -58,7 +64,7 @@ function computeLayout(canvasWidth) {
   // A few solo-channel rows sit at an explicit horizontal offset instead of
   // the generic stagger pattern, so they can line up under a specific
   // funnel elsewhere in the column (requested per-channel positioning).
-  const xOffsetOverrides = { university_solo: 196, friends_solo: 135, conferences_solo: -20 };
+  const xOffsetOverrides = { university: 196, friends: 135, events: -20 };
   const groupsRaw = FUNNEL_GROUPS.map((g, gi) => {
     const rowTop = stackTop + gi * rowH;
     const widths = g.channelIds.map(id => funnelWidthFor(id));
@@ -93,10 +99,14 @@ function computeLayout(canvasWidth) {
   // changes are needed for this.
   const channels = new Array(ENTRY_CHANNELS.length);
   const groups = groupsRaw.map(g => {
-    // Leak mark sits on the trunk past every member's join point, clearly
+    // Leak marks sit on the trunk past every member's join point, clearly
     // on the "merged" stretch rather than coinciding with any one T-joint.
-    const markX = g.rightmostCenterX + 0.6 * (tank1Left - g.rightmostCenterX);
-    const leakMarkPoint = { x: markX, y: g.mergeY };
+    // A group with several leaks (e.g. Fellowships) spaces them out along
+    // the same trunk.
+    const nLeaks = LEAKS.filter(l => l.stage === 'funnel' && l.channels.includes(g.channelIds[0])).length;
+    const fracs = nLeaks === 1 ? [0.6] : nLeaks === 2 ? [0.38, 0.72] : [];
+    const markXs = fracs.map(f => g.rightmostCenterX + f * (tank1Left - g.rightmostCenterX));
+    const leakMarkPoints = markXs.map(x => ({ x, y: g.mergeY }));
 
     g.channelIds.forEach((chId, mi) => {
       const chIndex = ENTRY_CHANNELS.findIndex(c => c.id === chId);
@@ -115,15 +125,16 @@ function computeLayout(canvasWidth) {
         id: chId, index: chIndex, def: channelById[chId],
         top, bottom, left, right: left + w,
         topWidth: w, bottomWidth: chPipeW, centerX,
-        path, leakMarkPoint,
-        leakMarkDist: dropLen + (markX - centerX),
+        path, leakMarkPoints,
+        leakMarkDists: markXs.map(mx => dropLen + (mx - centerX)),
         groupId: g.id, mergeY: g.mergeY, labelBand: mi % 2,
       };
     });
 
     return {
-      id: g.id, mergeY: g.mergeY, leakMarkPoint, tank1Left,
+      id: g.id, label: g.label, mergeY: g.mergeY, leakMarkPoints, tank1Left,
       leftmostCenterX: g.leftmostCenterX,
+      labelX: g.lefts[0] - 4, labelY: Math.min(...g.tops) - 28,
     };
   });
 
@@ -135,7 +146,7 @@ function computeLayout(canvasWidth) {
 
   // ── tank1 -> tank2: 3 parallel lanes that drop, then run sideways to
   //    the right (tank2 sits to the right of and below tank1), carrying
-  //    the 4 "caring" leaks ──
+  //    the caring-stage leaks ──
   const laneOff = CONFIG.LANE_OFFSET;
   const outletsX = [cx - laneOff, cx, cx + laneOff];
   tank1.outletXs = outletsX;
@@ -156,21 +167,27 @@ function computeLayout(canvasWidth) {
   const conn1Lanes = outletsX.map((x, i) => ({
     x, path: [{ x, y: tank1Bottom }, { x, y: railYs[i] }, { x: tank2Left, y: railYs[i] }],
   }));
-  const conn1LeakPoints = _distributeLeaksOnLanes(4, conn1Lanes, 15);
+  const nCaringLeaks = LEAKS.filter(l => l.stage === 'caring').length;
+  const conn1LeakPoints = _distributeLeaksOnLanes(nCaringLeaks, conn1Lanes, 15);
 
   const tank2Top = Math.min(...railYs) - 20;
-  const tank2H = (Math.max(...railYs) - Math.min(...railYs)) + 60;
+  // Extra depth beyond the rail spread gives the caring layer's (long)
+  // description paragraph room, since tank2.bottom is that layer's floor —
+  // sized so the wrapped text ends inside the band instead of crossing
+  // the dashed boundary into the upskilling layer.
+  const tank2H = (Math.max(...railYs) - Math.min(...railYs)) + 140;
   const tank2Bottom = tank2Top + tank2H;
   const tank2 = { left: tank2Left, right: tank2Left + tank2W, top: tank2Top, bottom: tank2Bottom, centerX: cx2, width: tank2W, id: 'tank2', label: 'UPSKILLING + CHOICES' };
 
-  // ── tank2 -> distribution rail: 3 parallel lanes (carry the 4 "upskilling" leaks) ──
+  // ── tank2 -> distribution rail: 3 parallel lanes (carry the upskilling leaks) ──
   const lanesX2 = [cx2 - laneOff, cx2, cx2 + laneOff];
   tank2.outletXs = lanesX2;
-  const conn2Len = 150;
+  const conn2Len = 170;
   const conn2Top = tank2Bottom;
   const distribRailY = conn2Top + conn2Len;
   const conn2Lanes = lanesX2.map(x => ({ x, path: [{ x, y: conn2Top }, { x, y: distribRailY }] }));
-  const conn2LeakPoints = _distributeLeaksOnLanes(4, conn2Lanes, 0);
+  const nUpskillLeaks = LEAKS.filter(l => l.stage === 'upskilling').length;
+  const conn2LeakPoints = _distributeLeaksOnLanes(nUpskillLeaks, conn2Lanes, 0);
 
   // Buckets sit to the right of (and below) tank2, rather than centered
   // under its outlet, so the leak marks on tank2's connectors don't read
@@ -194,14 +211,21 @@ function computeLayout(canvasWidth) {
     };
   });
 
+  // A job-decision leak that isn't tied to one bucket (fellowship hopping)
+  // sits on the distribution rail itself, where every droplet passes —
+  // between the rightmost tank2 lane and the first bucket.
+  const railLeakX = (lanesX2[lanesX2.length - 1] + bktLeft) / 2;
+
+  // Extra room below the bucket names for the additional-note chips.
   const nameBlockH = 60;
-  const ground = bktBot + 14 + nameBlockH + 40;
+  const ground = bktBot + 14 + nameBlockH + 70;
 
   // The buckets are the rightmost content now; make sure the canvas is
   // actually wide enough to hold them rather than trusting the caller's
   // width (which was sized before this layout knew where things land).
   const bktRightEdge = bktLeft + totalBktW;
   const width = Math.max(canvasWidth, bktRightEdge + 30);
+  const height = ground + 40;
 
   return {
     width, cx, cx2,
@@ -210,9 +234,17 @@ function computeLayout(canvasWidth) {
     conn1: { lanes: conn1Lanes, leakPoints: conn1LeakPoints },
     conn2: { top: conn2Top, bottom: distribRailY, len: conn2Len, lanes: conn2Lanes, leakPoints: conn2LeakPoints },
     distribRailY,
+    railLeakX,
     buckets,
     ground,
-    height: ground + 40,
+    height,
+    // Depth-layer bands and each band's text anchor, shared by the layer
+    // background, the stage chips, and app.js's hover fade. The jobs
+    // anchor sits directly left of the bucket row (rather than at the far
+    // page margin) so its heading/description aren't separated from the
+    // buckets by a wide stretch of dead space.
+    layerBounds: [0, tank1Bottom, tank2Bottom, distribRailY, height],
+    layerAnchorX: [tank1Right + 40, tank2.right + 40, tank2.right + 40, Math.max(20, bktLeft - LAYER_DESC_W[3] - 40)],
   };
 }
 
@@ -269,10 +301,12 @@ function _distributeLeaksOnLanes(count, lanes, bendMargin) {
 
 // ── Full-bleed depth layers, drawn as the page background ─────
 // Each solid band spans the full canvas width; the big label is always
-// visible, the description fades in via hoverAlpha (eased per-frame in
-// app.js, keyed by layer id) while the cursor is anywhere in that band.
-function _drawBackgroundLayers(ctx, layout, hoverAlpha) {
-  const boundsY = [0, layout.tank1.bottom, layout.tank2.bottom, layout.distribRailY, layout.height];
+// visible, the description fades in via layerAlpha (eased per-frame in
+// app.js, keyed by layer id) once the band has scrolled into view — and
+// then stays visible.
+function _drawBackgroundLayers(ctx, layout, layerAlpha) {
+  const boundsY = layout.layerBounds;
+  const anchorX = layout.layerAnchorX;
 
   ctx.save();
   PIPELINE_LAYERS.forEach((layer, i) => {
@@ -294,18 +328,6 @@ function _drawBackgroundLayers(ctx, layout, hoverAlpha) {
   });
   ctx.setLineDash([]);
 
-  // Each layer's own content occupies a different part of the width, so
-  // the label anchors where that layer happens to have open space: right
-  // of tank1 for discovery, right of tank2 for caring/upskilling (both
-  // clear of tank2 and the conn2 lanes), and the left margin for the
-  // career-choices layer (the buckets fill the right side there instead).
-  const anchorX = [
-    layout.tank1.right + 40,
-    layout.tank2.right + 40,
-    layout.tank2.right + 40,
-    20,
-  ];
-
   PIPELINE_LAYERS.forEach((layer, i) => {
     const x = anchorX[i];
     const labelY = boundsY[i] + 46;
@@ -315,16 +337,25 @@ function _drawBackgroundLayers(ctx, layout, hoverAlpha) {
     ctx.font = 'bold 22px "Inter", sans-serif';
     ctx.fillText(layer.label, x, labelY);
 
-    const alpha = hoverAlpha[layer.id] || 0;
+    const alpha = layerAlpha[layer.id] || 0;
     if (alpha > 0.01) {
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.fillStyle = '#55636f';
       ctx.font = '12px "Inter", sans-serif';
-      const maxW = Math.min(340, layout.width - x - 30);
+      const maxW = Math.min(LAYER_DESC_W[i], layout.width - x - 30);
       const lines = _wrapTextSimple(ctx, layer.text, maxW);
       let ly = labelY + 26;
       lines.forEach(line => { ctx.fillText(line, x, ly); ly += 18; });
+      // Interaction hint (discovery layer): bold, on its own line below
+      // the description paragraph.
+      if (layer.hint) {
+        ly += 6;
+        ctx.fillStyle = '#3d4c5a';
+        ctx.font = 'bold 12px "Inter", sans-serif';
+        const hintLines = _wrapTextSimple(ctx, layer.hint, maxW);
+        hintLines.forEach(line => { ctx.fillText(line, x, ly); ly += 18; });
+      }
       ctx.restore();
     }
   });
@@ -332,17 +363,91 @@ function _drawBackgroundLayers(ctx, layout, hoverAlpha) {
   ctx.restore();
 }
 
+// ── Hoverable info chips beside each layer heading ────────────
+// A vertical column of small labeled chips to the right of each layer's
+// description block; the ⓘ badge signals there's more on hover, and the
+// full text opens in the side panel.
+function _drawStageChips(ctx, layout, infoHitZones) {
+  const boundsY = layout.layerBounds;
+  const anchorX = layout.layerAnchorX;
+
+  PIPELINE_LAYERS.forEach((layer, i) => {
+    const boxes = STAGE_BOXES[layer.id];
+    if (!boxes || !boxes.length) return;
+    // The discovery band's left side is filled with funnels, so its chips
+    // sit to the right of the description. The bottom three bands are
+    // empty on the left, so their chip columns share one x there —
+    // vertically aligned with each other down the page's left edge.
+    const x = i === 0 ? anchorX[i] + LAYER_DESC_W[i] + 40 : 20;
+    // Start below the heading's text line — a long heading would
+    // otherwise run underneath a right-side chip column.
+    let y = boundsY[i] + 58;
+    boxes.forEach(box => {
+      _drawInfoChip(ctx, x, y, box.label, box.id, infoHitZones);
+      y += 32;
+    });
+  });
+}
+
+// One chip: rounded pill with a pulsing ⓘ badge and a short label.
+// Pushes its own hover hit-zone.
+function _drawInfoChip(ctx, x, y, label, infoId, infoHitZones) {
+  ctx.save();
+  ctx.font = 'bold 10px "Inter", sans-serif';
+  const textW = ctx.measureText(label).width;
+  const w = textW + 40, h = 24;
+
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.strokeStyle = 'rgba(91, 122, 153, 0.65)';
+  ctx.lineWidth = 1.2;
+  _roundRect(ctx, x, y, w, h, 12);
+  ctx.fill(); ctx.stroke();
+
+  // Pulsing ⓘ badge — the "there's information here" indicator.
+  const pulse = 0.75 + 0.25 * Math.sin(Date.now() * 0.004);
+  ctx.fillStyle = `rgba(91, 122, 153, ${pulse})`;
+  ctx.beginPath();
+  ctx.arc(x + 14, y + h / 2, 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold italic 9px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('i', x + 14, y + h / 2 + 0.5);
+
+  ctx.fillStyle = '#44556a';
+  ctx.font = 'bold 10px "Inter", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(label, x + 26, y + h / 2 + 0.5);
+  ctx.textBaseline = 'alphabetic';
+  ctx.restore();
+
+  infoHitZones.push({ kind: 'info', id: infoId, x, y, w, h });
+}
+
+// ── Additional-note chips anchored under the Technical Research bucket ──
+function _drawNoteBadges(ctx, layout, infoHitZones) {
+  const bl = layout.buckets['research'];
+  if (!bl) return;
+  let y = bl.bottom + 58;
+  NOTE_BADGES.forEach(nb => {
+    _drawInfoChip(ctx, bl.left, y, nb.label, nb.id, infoHitZones);
+    y += 30;
+  });
+}
+
 // ── Main draw entry ──────────────────────────────────────────
 function drawPipeline(ctx, layout, leaks, bucketCounts, tankOccupancy, leakHitZones, infoHitZones) {
   _drawEntryChannels(ctx, layout, leaks, leakHitZones);
   _drawTankBox(ctx, layout.tank1, tankOccupancy.tank1, 70, layout.tank1.outletXs);
-  _drawTankCornerLeak(ctx, layout.tank1, leaks, leakHitZones);
   _drawLanes(ctx, layout.conn1, CONFIG.PIPE_WIDTH, leaks.filter(l => l.stage === 'caring'), leakHitZones);
   _drawTankBox(ctx, layout.tank2, tankOccupancy.tank2, 50, layout.tank2.outletXs);
   _drawLanes(ctx, layout.conn2, CONFIG.PIPE_WIDTH, leaks.filter(l => l.stage === 'upskilling'), leakHitZones);
-  _drawBucketManifold(ctx, layout);
+  _drawBucketManifold(ctx, layout, leaks, leakHitZones);
   _drawBuckets(ctx, layout, bucketCounts, leaks, leakHitZones, infoHitZones);
+  _drawNoteBadges(ctx, layout, infoHitZones);
   _drawGround(ctx, layout);
+  _drawStageChips(ctx, layout, infoHitZones);
 }
 
 // ── Cartoon pipe helper: 3-tone banded tube along a polyline ──
@@ -444,13 +549,14 @@ function _drawEntryChannels(ctx, layout, leaks, leakHitZones) {
         x: ch.left - 4, y: ch.top - 20, w: ch.right - ch.left + 8, h: ch.bottom - ch.top + 24 });
     });
 
-    // One shared leak mark on the trunk, since the group's members share a
-    // single failure mode — this is what collapses a cluttered fan of
-    // near-identical pipes/leaks into a single readable one.
-    const leak = leaks.find(l => l.stage === 'funnel' && l.channels.includes(members[0].id));
-    if (leak) {
-      _drawLeakMark(ctx, g.leakMarkPoint.x, g.leakMarkPoint.y, chW / 2, leak, leakHitZones, 'v');
-    }
+    // The group's leak marks on the shared trunk — most categories have a
+    // single shared failure mode, but a category can carry several leaks
+    // (e.g. Fellowships), each drawn at its own clearly-spaced point.
+    const groupLeaks = leaks.filter(l => l.stage === 'funnel' && l.channels.includes(members[0].id));
+    groupLeaks.forEach((leak, li) => {
+      const pt = g.leakMarkPoints[li];
+      if (pt) _drawLeakMark(ctx, pt.x, pt.y, chW / 2, leak, leakHitZones, 'v');
+    });
   });
 
   ctx.restore();
@@ -472,6 +578,14 @@ function _drawEntryChannelLabels(ctx, layout) {
   ctx.textBaseline = 'alphabetic';
   layout.channels.forEach(ch => {
     ctx.fillText(ch.def.label, ch.centerX, ch.top + labelYOffset[ch.labelBand]);
+  });
+
+  // Funnel-category headings from the post, above each cluster.
+  ctx.fillStyle = '#3d4c5a';
+  ctx.font = 'bold 8.5px "JetBrains Mono", monospace';
+  ctx.textAlign = 'left';
+  layout.groups.forEach(g => {
+    ctx.fillText(g.label, g.labelX, g.labelY);
   });
   ctx.restore();
 }
@@ -539,7 +653,7 @@ function _drawTankBox(ctx, tank, occupancy, maxViz, outletXs) {
 }
 
 // ── Bucket distribution manifold ──────────────────────────────
-function _drawBucketManifold(ctx, layout) {
+function _drawBucketManifold(ctx, layout, leaks, leakHitZones) {
   const ids = JOB_BUCKETS.map(b => b.id);
   const firstBl = layout.buckets[ids[0]];
   const lastBl = layout.buckets[ids[ids.length - 1]];
@@ -561,16 +675,23 @@ function _drawBucketManifold(ctx, layout) {
     ctx.fill();
     ctx.restore();
   });
+
+  // Rail-wide job-decision leak (fellowship hopping) — every droplet
+  // passes this point on its way to whichever bucket it chose.
+  const railLeak = leaks.find(l => l.stage === 'jobs' && l.rail);
+  if (railLeak) {
+    _drawLeakMark(ctx, layout.railLeakX, layout.distribRailY, CONFIG.PIPE_WIDTH / 2, railLeak, leakHitZones, 'v');
+  }
 }
 
-// ── Buckets + impact bars ─────────────────────────────────────
+// ── Buckets ──────────────────────────────────────────────────
 function _drawBuckets(ctx, layout, bucketCounts, leaks, leakHitZones, infoHitZones) {
   ctx.save();
 
   JOB_BUCKETS.forEach((b) => {
     const bl = layout.buckets[b.id];
     const count = bucketCounts[b.id] || 0;
-    infoHitZones.push({ id: b.id, x: bl.left, y: bl.top, w: bl.width, h: bl.bottom - bl.top });
+    infoHitZones.push({ kind: 'bucket', id: b.id, x: bl.left, y: bl.top, w: bl.width, h: bl.bottom - bl.top });
 
     // Pitched roof, not a flat lid — the only way in is through the
     // branch pipe/spigot at the peak; anything else that lands on the
@@ -608,19 +729,9 @@ function _drawBuckets(ctx, layout, bucketCounts, leaks, leakHitZones, infoHitZon
       ctx.fillRect(bl.left + 2, bl.bottom - fillH, bl.width - 4, fillH);
     }
 
-    const strengthColor = { STRONG:'#5f8a6e', MODERATE:'#a8934f', WEAK:'#b17a4f', 'VERY WEAK':'#a9695f' }[b.pipelineStrength];
-    ctx.fillStyle = strengthColor + '22';
-    ctx.strokeStyle = strengthColor + 'aa';
-    ctx.lineWidth = 1;
-    _roundRect(ctx, bl.left + 4, bl.top + 5, bl.width - 8, 14, 3);
-    ctx.fill(); ctx.stroke();
-    ctx.fillStyle = strengthColor;
-    ctx.font = 'bold 7.5px "JetBrains Mono", monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(b.pipelineStrength, bl.centerX, bl.top + 14);
-
     ctx.fillStyle = '#5b6b7a';
     ctx.font = '8px "Inter", sans-serif';
+    ctx.textAlign = 'center';
     ctx.fillText(count + ' placed', bl.centerX, bl.bottom - 5);
 
     _drawBucketName(ctx, bl, b);
@@ -635,8 +746,7 @@ function _drawBuckets(ctx, layout, bucketCounts, leaks, leakHitZones, infoHitZon
   ctx.restore();
 }
 
-// Large, neatly-centered bucket name beneath the bucket (where the old
-// marginal-impact bars used to be).
+// Large, neatly-centered bucket name beneath the bucket.
 function _drawBucketName(ctx, bl, b) {
   ctx.save();
   const words = b.label.split(' ');
@@ -655,14 +765,6 @@ function _drawBucketName(ctx, bl, b) {
     ctx.fillText(line1, bl.centerX, y0 + 10);
   }
   ctx.restore();
-}
-
-// ── Tank-body leak: a steady drip out the bottom-left corner, distinct
-// from the pipe leaks on its outlet lanes ─────────────────────
-function _drawTankCornerLeak(ctx, tank, leaks, leakHitZones) {
-  const leak = leaks.find(l => l.id === 'quiet_disengagement');
-  if (!leak) return;
-  _drawLeakMark(ctx, tank.left + 16, tank.bottom, 9, leak, leakHitZones, 'v');
 }
 
 // ── Leak tick mark crossing a pipe wall, plus clickable badge ──
@@ -767,12 +869,12 @@ function drawChannelTooltip(ctx, seg, mx, my, canvasWidth) {
   const pad = 10;
   const lh  = 13;
   ctx.save();
-  ctx.font = '9px "Inter", sans-serif';
-  const exLines = _wrapTextSimple(ctx, seg.examples, 200);
-  const descLines = _wrapTextSimple(ctx, seg.description, 200);
-  const allLines = exLines.concat([''], descLines);
   const w = 230;
-  const h = pad * 2 + 14 + allLines.length * lh + 6;
+  ctx.font = 'bold 10px "Inter", sans-serif';
+  const titleLines = _wrapTextSimple(ctx, seg.fullLabel, w - pad * 2);
+  ctx.font = '9px "Inter", sans-serif';
+  const exLines = _wrapTextSimple(ctx, seg.examples, w - pad * 2 - 10);
+  const h = pad * 2 + titleLines.length * 14 + 4 + exLines.length * lh;
 
   let tx = mx + 14;
   let ty = my - h / 2;
@@ -789,13 +891,14 @@ function drawChannelTooltip(ctx, seg, mx, my, canvasWidth) {
   ctx.font = 'bold 10px "Inter", sans-serif';
   ctx.textBaseline = 'top';
   ctx.textAlign = 'left';
-  ctx.fillText(seg.fullLabel, tx + pad, ty + pad);
+  let lineY = ty + pad;
+  titleLines.forEach(line => { ctx.fillText(line, tx + pad, lineY); lineY += 14; });
 
   ctx.fillStyle = '#5b6b7a';
   ctx.font = '8.5px "Inter", sans-serif';
-  let lineY = ty + pad + 14 + 2;
-  allLines.forEach(line => {
-    ctx.fillText(line || '', tx + pad, lineY);
+  lineY += 4;
+  exLines.forEach(line => {
+    ctx.fillText(line, tx + pad, lineY);
     lineY += lh;
   });
   ctx.restore();
