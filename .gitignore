@@ -1,1 +1,5 @@
 .claude/
+
+# Local source material, not part of the site
+*.docx
+docx_extracted.txt
