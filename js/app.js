@@ -202,12 +202,12 @@
       p.update(layout, leaks);
       if (p.state === 'dead') { dead.push(i); return; }
 
+      // The landed column's pile height is already raised once in
+      // _updateInBucket on touchdown — raising it again here made the
+      // heap grow twice as fast as the balls actually in it.
       if (p.state === 'inBucket' && p._settled && !p._counted) {
         p._counted = true;
         bucketCounts[p.targetBucket] = (bucketCounts[p.targetBucket] || 0) + 1;
-        const bl = layout.buckets[p.targetBucket];
-        const idx = p._pileCol || 0;
-        bl.columns[idx] = Math.max(bl.top + CONFIG.PARTICLE_RADIUS + 4, bl.columns[idx] - CONFIG.PARTICLE_RADIUS * 2.1 - Math.random() * 1.5);
       }
     });
     for (let i = dead.length - 1; i >= 0; i--) particles.splice(dead[i], 1);

@@ -718,13 +718,17 @@ function _drawBuckets(ctx, layout, bucketCounts, leaks, leakHitZones, infoHitZon
     ctx.lineTo(bl.left, bl.top);
     ctx.stroke();
 
-    const maxP = 40;
-    const fillFrac = Math.min(count / maxP, 1);
-    const fillH = (bl.bottom - bl.top - 24) * fillFrac;
+    // Water level tracks the actual pile of settled droplets (average
+    // column height) so the level and the ball count can never drift
+    // apart, and all buckets share the tanks' blue-gray water rather
+    // than each bucket's accent color.
+    const baseline = bl.bottom - CONFIG.PARTICLE_RADIUS - 2;
+    const avgPile = bl.columns.reduce((s, c) => s + (baseline - c), 0) / bl.columns.length;
+    const fillH = Math.min(avgPile, bl.bottom - bl.top - 24);
     if (fillH > 0) {
       const grad = ctx.createLinearGradient(0, bl.bottom, 0, bl.bottom - fillH);
-      grad.addColorStop(0, b.color + '50');
-      grad.addColorStop(1, b.color + '15');
+      grad.addColorStop(0, 'rgba(91, 122, 153, 0.38)');
+      grad.addColorStop(1, 'rgba(91, 122, 153, 0.16)');
       ctx.fillStyle = grad;
       ctx.fillRect(bl.left + 2, bl.bottom - fillH, bl.width - 4, fillH);
     }

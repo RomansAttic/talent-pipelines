@@ -144,7 +144,10 @@ class Particle {
       m.done = true;
       const rate = m.leak.fixed ? m.leak.fixedEscapeRate : m.leak.escapeRate;
       const severity = CONFIG.LEAK_SEVERITY[m.leak.stage] || 1.5;
-      if (Math.random() < Math.min(0.97, rate * severity)) { this._doLeak(m.leak.stage === 'funnel'); return; }
+      // Students slip past checkpoints more often than mid-career people
+      // (see the leakMult note on PERSON_TYPES).
+      const mult = this.type.leakMult || 1;
+      if (Math.random() < Math.min(0.97, rate * severity * mult)) { this._doLeak(m.leak.stage === 'funnel'); return; }
     }
 
     if (this._pathDist >= this._pathTotalLen) {
@@ -362,6 +365,11 @@ class Particle {
     // of falling to the pile below (same bug class as the tank1->tank2
     // _enterTank fix).
     this._touchedSurface = false;
+    // Every droplet enters through the spigot at the roof's center, so
+    // without its own randomized landing spot the pile would heap up in
+    // the middle columns and never reach the bucket's edges.
+    const margin = this.radius + 3;
+    this._bucketTargetX = bl.left + margin + Math.random() * (bl.width - margin * 2);
   }
 
   _updateInBucket(layout) {
@@ -374,6 +382,13 @@ class Particle {
     // natural uneven heap instead of stacked layers.
     const nCols = bl.columns.length;
     const colW = bl.width / nCols;
+
+    // Glide toward this droplet's own randomized landing column while
+    // falling; once the pile-gap search below has run, x is final.
+    if (!this._pileSearched) {
+      this.x += (this._bucketTargetX - this.x) * 0.08;
+    }
+
     let colIdx = Math.max(0, Math.min(nCols - 1, Math.floor((this.x - bl.left) / colW)));
 
     // Just before actually touching down, check a small neighborhood of

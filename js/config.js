@@ -81,63 +81,72 @@ const CONFIG = {
 // People" section — the invitation is the same regardless of who you are.
 const PERSON_PROMPT = 'Try to imagine yourself as this person. Think about every stage of the pipeline you go through. Where do you get lost? How can things be made easier for you?';
 
+// leakMult scales every leak checkpoint's escape probability for that
+// person type: students (<1) survive the pipeline disproportionately
+// often, mid-career people (>1) mostly get lost along the way. Tuned
+// empirically (headless runs of the particle sim), not by averaging:
+// several checkpoints already clamp at 0.97, so mid-career multipliers
+// mostly can't raise losses further and the student discount has to
+// stay mild to keep total end-to-end arrivals within ~10% of what they
+// were before the skew. As tuned, ~19 of every 20 droplets that reach
+// a bucket are students.
 const PERSON_TYPES = [
   {
-    id: 'undergrad', label: 'Undergraduate Student', color: '#90AFC9', weight: 0.22,
+    id: 'undergrad', label: 'Undergraduate Student', color: '#90AFC9', weight: 0.22, leakMult: 0.85,
     description: PERSON_PROMPT,
     funnelWeights: { university:0.28, friends:0.16, fellowships:0.12, youtube:0.10, misc:0.08, blogs:0.06, forums:0.04, events:0.06, movies:0.02, books:0.03, activist:0.02, protests:0.01, conferences:0.02 },
     bucketWeights: { research:0.40, policy:0.20, scalers:0.05, ops:0.12, generalist:0.13, comms:0.10 },
   },
   {
-    id: 'phd', label: 'PhD Student', color: '#5E7F9C', weight: 0.16,
+    id: 'phd', label: 'PhD Student', color: '#5E7F9C', weight: 0.16, leakMult: 0.92,
     description: PERSON_PROMPT,
     funnelWeights: { conferences:0.22, fellowships:0.20, blogs:0.14, forums:0.08, friends:0.12, university:0.06, books:0.05, youtube:0.04, misc:0.04, events:0.03, activist:0.01, movies:0.005, protests:0.005 },
     bucketWeights: { research:0.60, policy:0.15, scalers:0.04, ops:0.05, generalist:0.10, comms:0.06 },
   },
   {
-    id: 'infosec', label: 'Mid-career: InfoSec', color: '#97A3AE', weight: 0.08,
+    id: 'infosec', label: 'Mid-career: InfoSec', color: '#97A3AE', weight: 0.08, leakMult: 1.40,
     description: PERSON_PROMPT,
     funnelWeights: { conferences:0.24, misc:0.14, youtube:0.12, friends:0.12, events:0.10, blogs:0.08, forums:0.05, books:0.05, activist:0.04, movies:0.03, protests:0.02, university:0.005, fellowships:0.005 },
     bucketWeights: { research:0.35, policy:0.08, scalers:0.07, ops:0.20, generalist:0.20, comms:0.10 },
   },
   {
-    id: 'comms', label: 'Mid-career: Communications', color: '#7C93A8', weight: 0.08,
+    id: 'comms', label: 'Mid-career: Communications', color: '#7C93A8', weight: 0.08, leakMult: 1.40,
     description: PERSON_PROMPT,
     funnelWeights: { misc:0.18, movies:0.14, books:0.12, friends:0.13, events:0.12, activist:0.10, youtube:0.09, blogs:0.06, conferences:0.03, protests:0.02, forums:0.01 },
     bucketWeights: { comms:0.50, policy:0.15, generalist:0.15, ops:0.10, scalers:0.05, research:0.05 },
   },
   {
-    id: 'swe', label: 'Mid-career: Software Engineering', color: '#6C8CA6', weight: 0.10,
+    id: 'swe', label: 'Mid-career: Software Engineering', color: '#6C8CA6', weight: 0.10, leakMult: 1.35,
     description: PERSON_PROMPT,
     funnelWeights: { youtube:0.16, blogs:0.16, misc:0.14, forums:0.10, conferences:0.12, friends:0.11, books:0.06, events:0.08, fellowships:0.02, movies:0.02, activist:0.02, protests:0.01 },
     bucketWeights: { research:0.45, ops:0.15, generalist:0.15, scalers:0.10, policy:0.10, comms:0.05 },
   },
   {
-    id: 'econ', label: 'Mid-career: Economics', color: '#AAB4BD', weight: 0.07,
+    id: 'econ', label: 'Mid-career: Economics', color: '#AAB4BD', weight: 0.07, leakMult: 1.40,
     description: PERSON_PROMPT,
     funnelWeights: { blogs:0.22, books:0.12, conferences:0.18, friends:0.14, misc:0.10, forums:0.06, events:0.08, fellowships:0.04, youtube:0.03, activist:0.02, movies:0.01 },
     bucketWeights: { policy:0.50, research:0.20, generalist:0.15, ops:0.05, scalers:0.05, comms:0.05 },
   },
   {
-    id: 'policy', label: 'Mid-career: Policy', color: '#B7CCE0', weight: 0.08,
+    id: 'policy', label: 'Mid-career: Policy', color: '#B7CCE0', weight: 0.08, leakMult: 1.35,
     description: PERSON_PROMPT,
     funnelWeights: { conferences:0.20, books:0.14, blogs:0.14, misc:0.12, friends:0.12, events:0.10, activist:0.06, youtube:0.05, forums:0.03, fellowships:0.02, movies:0.01, protests:0.01 },
     bucketWeights: { policy:0.60, generalist:0.12, comms:0.10, research:0.08, ops:0.05, scalers:0.05 },
   },
   {
-    id: 'research', label: 'Mid-career: Research', color: '#4F6E8C', weight: 0.08,
+    id: 'research', label: 'Mid-career: Research', color: '#4F6E8C', weight: 0.08, leakMult: 1.30,
     description: PERSON_PROMPT,
     funnelWeights: { conferences:0.24, blogs:0.16, fellowships:0.10, books:0.10, friends:0.12, forums:0.08, misc:0.08, youtube:0.05, events:0.05, university:0.01, activist:0.005, movies:0.005 },
     bucketWeights: { research:0.55, policy:0.15, generalist:0.12, ops:0.08, scalers:0.05, comms:0.05 },
   },
   {
-    id: 'mgmt', label: 'Mid-career: Management', color: '#8FA3B8', weight: 0.07,
+    id: 'mgmt', label: 'Mid-career: Management', color: '#8FA3B8', weight: 0.07, leakMult: 1.50,
     description: PERSON_PROMPT,
     funnelWeights: { friends:0.18, misc:0.16, books:0.14, events:0.12, conferences:0.12, movies:0.08, youtube:0.08, blogs:0.06, activist:0.04, protests:0.01, forums:0.01 },
     bucketWeights: { scalers:0.40, ops:0.30, generalist:0.20, policy:0.05, comms:0.05 },
   },
   {
-    id: 'other', label: 'Mid-career: Other', color: '#839099', weight: 0.06,
+    id: 'other', label: 'Mid-career: Other', color: '#839099', weight: 0.06, leakMult: 1.45,
     description: PERSON_PROMPT,
     funnelWeights: { friends:0.20, misc:0.16, movies:0.12, youtube:0.12, events:0.12, activist:0.10, books:0.08, blogs:0.04, protests:0.03, forums:0.02, conferences:0.01 },
     bucketWeights: { generalist:0.30, ops:0.25, comms:0.15, policy:0.15, scalers:0.10, research:0.05 },
@@ -268,8 +277,13 @@ const LEAKS = [
     problem: 'Not many people feel strongly motivated to encourage their friends to do more things in AI safety, and many people already in AI safety have few friends on the outside.',
     solution: 'Motivate more people to be a “Noah Birnbaum”: someone who regularly reaches out to their friends, encourages them to try new things, and tells them about upcoming opportunities that they might not otherwise know about.',
   },
-  // Events group ("Highly uncertain about whether there are leaks/what
-  // they are" in the post) intentionally carries no leak.
+  {
+    id:'events_first_contact', stage:'funnel', channels:['conferences','events'],
+    title: 'Not Many People First Hear About AI Safety at an Event',
+    escapeRate: 0.55, fixedEscapeRate: 0.40, fixed: false,
+    problem: 'Not many people first hear about AI safety at an event — conferences and meetups mostly reach people who already know enough about the field to show up in the first place.',
+    solution: 'Make more events! More conferences, hackathons, meetups, and panels in more places give more people a chance at a first point of contact.',
+  },
 
   // ── Caring-stage leaks (on the pipes toward upskilling) ──
   {
