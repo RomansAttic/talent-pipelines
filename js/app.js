@@ -93,9 +93,17 @@
     titleRaf = requestAnimationFrame(animateTitle);
   }
 
+  // Canvases render at device resolution (backing store scaled by
+  // devicePixelRatio) but all drawing/mouse code stays in CSS pixels —
+  // the context transform absorbs the difference. Without this, text
+  // drawn on the canvas is upscaled and blurry on high-DPI displays.
   function resizeTitleCanvas() {
-    titleCanvas.width  = window.innerWidth;
-    titleCanvas.height = window.innerHeight;
+    const dpr = window.devicePixelRatio || 1;
+    titleCanvas.width  = window.innerWidth  * dpr;
+    titleCanvas.height = window.innerHeight * dpr;
+    titleCanvas.style.width  = window.innerWidth  + 'px';
+    titleCanvas.style.height = window.innerHeight + 'px';
+    tCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   function spawnTitleDots() {
@@ -115,7 +123,7 @@
 
   function animateTitle() {
     if (page !== 'title') return;
-    const w = titleCanvas.width, h = titleCanvas.height;
+    const w = window.innerWidth, h = window.innerHeight;
     tCtx.fillStyle = CONFIG.BG_TOP;
     tCtx.fillRect(0, 0, w, h);
 
@@ -147,10 +155,12 @@
     layout = computeLayout(minW);
     CONFIG.CENTER_X = layout.cx;
 
-    pipeCanvas.width  = layout.width;
-    pipeCanvas.height = layout.height;
+    const dpr = window.devicePixelRatio || 1;
+    pipeCanvas.width  = layout.width  * dpr;
+    pipeCanvas.height = layout.height * dpr;
     pipeCanvas.style.width  = layout.width  + 'px';
     pipeCanvas.style.height = layout.height + 'px';
+    pCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     particles  = [];
     layerAlpha = { discovery: 0, caring: 0, upskilling: 0, jobs: 0 };
@@ -254,7 +264,7 @@
     // each other.
     if (hoveredChannelIdx !== null) {
       const seg = ENTRY_CHANNELS[hoveredChannelIdx];
-      drawChannelTooltip(pCtx, seg, mouseX, mouseY, pipeCanvas.width);
+      drawChannelTooltip(pCtx, seg, mouseX, mouseY, layout.width);
     } else if (hoveredParticle) {
       hoveredParticle.drawTooltip(pCtx);
     }
