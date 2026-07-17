@@ -148,12 +148,16 @@ function computeLayout(canvasWidth) {
   //    the right (tank2 sits to the right of and below tank1), carrying
   //    the caring-stage leaks ──
   const laneOff = CONFIG.LANE_OFFSET;
-  const outletsX = [cx - laneOff, cx, cx + laneOff];
+  // Outlets sit left-of-center so every lane's horizontal rail is long
+  // enough to carry its CARING_LANES category label (the rightmost lane's
+  // rail is the shortest, and it still needs ~80px of labelable pipe).
+  const outletsX = [cx - 2 * laneOff, cx - laneOff, cx];
   tank1.outletXs = outletsX;
-  // railGap must clear the rendered pipe width (~PIPE_WIDTH+6) so the 3
-  // stacked horizontal rails don't visually bleed into one another (and
-  // so a leak tick mark on one doesn't reach into its neighbor).
-  const dropLen0 = 40, railGap = 34;
+  // railGap must clear the rendered pipe width (~PIPE_WIDTH+6) plus a
+  // rail's category label and leak badge, both of which live in the gap
+  // above the pipe — smaller gaps put the text/badges of one rail onto
+  // the pipe above it.
+  const dropLen0 = 40, railGap = 48;
   const cx2 = cx + CONFIG.TANK2_OFFSET_X;
   const tank2W = 190;
   const tank2Left = cx2 - tank2W / 2;
@@ -165,10 +169,12 @@ function computeLayout(canvasWidth) {
   // visually cross each other.
   const railYs = outletsX.map((x, i) => tank1Bottom + dropLen0 + (outletsX.length - 1 - i) * railGap);
   const conn1Lanes = outletsX.map((x, i) => ({
-    x, path: [{ x, y: tank1Bottom }, { x, y: railYs[i] }, { x: tank2Left, y: railYs[i] }],
+    x, def: CARING_LANES[i], railY: railYs[i],
+    path: [{ x, y: tank1Bottom }, { x, y: railYs[i] }, { x: tank2Left, y: railYs[i] }],
   }));
-  const nCaringLeaks = LEAKS.filter(l => l.stage === 'caring').length;
-  const conn1LeakPoints = _distributeLeaksOnLanes(nCaringLeaks, conn1Lanes, 15);
+  // Deep base fraction: each rail's label sits at its left end, so marks
+  // land on the right stretch of pipe, past the text.
+  const conn1LeakPoints = _distributeLeaksOnLanes(LEAKS.filter(l => l.stage === 'caring'), conn1Lanes, 15, 0.70, 0);
 
   const tank2Top = Math.min(...railYs) - 20;
   // Extra depth beyond the rail spread gives the caring layer's (long)
@@ -179,22 +185,31 @@ function computeLayout(canvasWidth) {
   const tank2Bottom = tank2Top + tank2H;
   const tank2 = { left: tank2Left, right: tank2Left + tank2W, top: tank2Top, bottom: tank2Bottom, centerX: cx2, width: tank2W, id: 'tank2', label: 'UPSKILLING + CHOICES' };
 
-  // ── tank2 -> distribution rail: 3 parallel lanes (carry the upskilling leaks) ──
-  const lanesX2 = [cx2 - laneOff, cx2, cx2 + laneOff];
+  // ── tank2 -> distribution rail: 5 parallel lanes, one per UPSKILL_LANES
+  // category from the post (narrower pipes so all five fit across tank2's
+  // bottom wall with distinct outlet holes) ──
+  const conn2Spacing = 38;
+  const lanesX2 = [-2, -1, 0, 1, 2].map(k => cx2 + k * conn2Spacing);
   tank2.outletXs = lanesX2;
   const conn2Len = 170;
   const conn2Top = tank2Bottom;
   const distribRailY = conn2Top + conn2Len;
-  const conn2Lanes = lanesX2.map(x => ({ x, path: [{ x, y: conn2Top }, { x, y: distribRailY }] }));
-  const nUpskillLeaks = LEAKS.filter(l => l.stage === 'upskilling').length;
-  const conn2LeakPoints = _distributeLeaksOnLanes(nUpskillLeaks, conn2Lanes, 0);
+  const conn2Lanes = lanesX2.map((x, i) => ({ x, def: UPSKILL_LANES[i], path: [{ x, y: conn2Top }, { x, y: distribRailY }] }));
+  // Deep base fraction: the lanes' rotated labels hang from the top of
+  // each pipe, so all marks/badges sit on the bottom stretch, below the
+  // longest label — but high enough that the last lane's badge clears
+  // the rail-wide fellowship-hopping badge just below it.
+  const conn2LeakPoints = _distributeLeaksOnLanes(LEAKS.filter(l => l.stage === 'upskilling'), conn2Lanes, 0, 0.70, 0);
 
   // Buckets sit to the right of (and below) tank2, rather than centered
   // under its outlet, so the leak marks on tank2's connectors don't read
   // as if they're falling straight into the buckets.
   const bktTop = distribRailY + 40;
   const bktBot = bktTop + 215;
-  const bktW = 104, bktGap = 12;
+  // Slightly slimmer than they used to be — reclaims the width the wider
+  // TANK2_OFFSET_X (room for the caring-lane labels) pushed downstream,
+  // so the canvas stays inside a typical viewport.
+  const bktW = 100, bktGap = 10;
   const nBkt = JOB_BUCKETS.length;
   const totalBktW = nBkt * bktW + (nBkt - 1) * bktGap;
   const bktLeft = tank2.right + 12;
@@ -227,6 +242,19 @@ function computeLayout(canvasWidth) {
   const width = Math.max(canvasWidth, bktRightEdge + 30);
   const height = ground + 40;
 
+  // Static hover zones for the labeled connector lanes and the job-
+  // decision rail — hovering anywhere along the labeled stretch of pipe
+  // opens the same tooltip the entry funnels use (fullLabel + examples).
+  const laneZones = [];
+  conn1Lanes.forEach(lane => {
+    laneZones.push({ seg: lane.def, x: lane.x - 12, y: lane.railY - 26, w: tank2Left - lane.x + 12, h: 42 });
+  });
+  conn2Lanes.forEach(lane => {
+    laneZones.push({ seg: lane.def, x: lane.x - 22, y: conn2Top, w: 34, h: conn2Len });
+  });
+  const railLeft = Math.min(buckets[JOB_BUCKETS[0].id].centerX, ...lanesX2);
+  laneZones.push({ seg: JOB_RESOURCES, x: railLeft, y: distribRailY - 14, w: bktLeft - railLeft, h: 46 });
+
   return {
     width, cx, cx2,
     channels, groups,
@@ -235,6 +263,8 @@ function computeLayout(canvasWidth) {
     conn2: { top: conn2Top, bottom: distribRailY, len: conn2Len, lanes: conn2Lanes, leakPoints: conn2LeakPoints },
     distribRailY,
     railLeakX,
+    laneZones,
+    jobLabel: { x: railLeft + 2, y: distribRailY + 30 },
     buckets,
     ground,
     height,
@@ -274,18 +304,23 @@ function _pathLength(path) {
   return L;
 }
 
-// Spread `count` leaks across N lanes (round-robin), stacking repeats at a
-// deeper fraction down the same lane so no two marks land on top of each
-// other. Marks always land on the lane's *last* segment (past its own
-// bend, whatever that lane's individual drop length happens to be) with
-// at least `bendMargin` px of clearance, so a mark never sits on or right
-// next to a corner.
-function _distributeLeaksOnLanes(count, lanes, bendMargin) {
+// Place a stage's leaks on its lanes. A leak with an explicit `lane`
+// lands on that lane (the connector lanes are labeled categories now, so
+// each leak belongs somewhere specific); leaks without one fall back to
+// round-robin. Repeats on the same lane stack at a deeper fraction, and
+// a small per-lane stagger keeps marks on adjacent parallel lanes from
+// sitting at the same height. Marks always land on the lane's *last*
+// segment (past its own bend, whatever that lane's individual drop
+// length happens to be) with at least `bendMargin` px of clearance, so
+// a mark never sits on or right next to a corner.
+function _distributeLeaksOnLanes(stageLeaks, lanes, bendMargin, baseFrac, laneStep) {
   const pts = [];
-  for (let i = 0; i < count; i++) {
-    const laneIdx = i % lanes.length;
-    const occurrence = Math.floor(i / lanes.length);
-    const frac = 0.3 + occurrence * 0.4;
+  const perLane = {};
+  stageLeaks.forEach((leak, i) => {
+    const laneIdx = leak.lane !== undefined ? leak.lane : i % lanes.length;
+    const occurrence = perLane[laneIdx] || 0;
+    perLane[laneIdx] = occurrence + 1;
+    const frac = Math.min(0.85, baseFrac + laneIdx * laneStep + occurrence * 0.35);
     const lane = lanes[laneIdx];
     const total = _pathLength(lane.path);
     const bendDist = lane.path.length > 2
@@ -295,7 +330,7 @@ function _distributeLeaksOnLanes(count, lanes, bendMargin) {
     const dist = skip + frac * (total - skip);
     const pt = _pointAtDist(lane.path, dist);
     pts.push({ x: pt.x, y: pt.y, dx: pt.dx, dy: pt.dy, dist, laneIdx, leakIdx: i });
-  }
+  });
   return pts;
 }
 
@@ -441,8 +476,8 @@ function drawPipeline(ctx, layout, leaks, bucketCounts, tankOccupancy, leakHitZo
   _drawEntryChannels(ctx, layout, leaks, leakHitZones);
   _drawTankBox(ctx, layout.tank1, tankOccupancy.tank1, 70, layout.tank1.outletXs);
   _drawLanes(ctx, layout.conn1, CONFIG.PIPE_WIDTH, leaks.filter(l => l.stage === 'caring'), leakHitZones);
-  _drawTankBox(ctx, layout.tank2, tankOccupancy.tank2, 50, layout.tank2.outletXs);
-  _drawLanes(ctx, layout.conn2, CONFIG.PIPE_WIDTH, leaks.filter(l => l.stage === 'upskilling'), leakHitZones);
+  _drawTankBox(ctx, layout.tank2, tankOccupancy.tank2, 50, layout.tank2.outletXs, CONFIG.CONN2_PIPE_WIDTH + 10);
+  _drawLanes(ctx, layout.conn2, CONFIG.CONN2_PIPE_WIDTH, leaks.filter(l => l.stage === 'upskilling'), leakHitZones);
   _drawBucketManifold(ctx, layout, leaks, leakHitZones);
   _drawBuckets(ctx, layout, bucketCounts, leaks, leakHitZones, infoHitZones);
   _drawNoteBadges(ctx, layout, infoHitZones);
@@ -587,11 +622,42 @@ function _drawEntryChannelLabels(ctx, layout) {
   layout.groups.forEach(g => {
     ctx.fillText(g.label, g.labelX, g.labelY);
   });
+
+  // Category labels on the tank1->tank2 rails, sitting just above each
+  // lane's horizontal run (which was sized to fit them).
+  ctx.fillStyle = '#4d6072';
+  ctx.font = '8px "JetBrains Mono", monospace';
+  layout.conn1.lanes.forEach(lane => {
+    ctx.fillText(lane.def.label, lane.x + 18, lane.railY - 18);
+  });
+
+  // Category labels on the five tank2->rail drops — the lanes are too
+  // close together for horizontal text, so each label reads bottom-up
+  // alongside its pipe, the way piping diagrams label vertical runs.
+  // Anchored to the pipes' top so every label ends well above the leak
+  // marks/badges, which all sit on the lanes' bottom stretch — the two
+  // would otherwise collide in the 38px between adjacent pipes.
+  layout.conn2.lanes.forEach(lane => {
+    ctx.save();
+    ctx.translate(lane.x - 17, layout.conn2.top + 10 + ctx.measureText(lane.def.label).width);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(lane.def.label, 0, 0);
+    ctx.restore();
+  });
+
+  // The distribution rail is where job decisions happen — label the
+  // resources people lean on there, under the rail's open left stretch.
+  ctx.fillStyle = '#3d4c5a';
+  ctx.font = 'bold 8.5px "JetBrains Mono", monospace';
+  ctx.fillText(JOB_RESOURCES.label, layout.jobLabel.x, layout.jobLabel.y);
   ctx.restore();
 }
 
-// ── Tank: rectangular container with a rising/falling fill level
-function _drawTankBox(ctx, tank, occupancy, maxViz, outletXs) {
+// ── Tank: rectangular container with a rising/falling fill level.
+// outletGapW sizes the punched openings in the bottom wall to the width
+// of the pipes that actually leave this tank (tank2's five lanes are
+// narrower than the trunk, so its holes must be too or they'd merge).
+function _drawTankBox(ctx, tank, occupancy, maxViz, outletXs, outletGapW) {
   ctx.save();
 
   // The displayed level eases toward the real occupancy rather than
@@ -644,7 +710,7 @@ function _drawTankBox(ctx, tank, occupancy, maxViz, outletXs) {
   if (outletXs && outletXs.length) {
     ctx.save();
     ctx.globalCompositeOperation = 'destination-out';
-    const gapW = CONFIG.PIPE_WIDTH + 10;
+    const gapW = outletGapW || (CONFIG.PIPE_WIDTH + 10);
     outletXs.forEach(x => { ctx.fillRect(x - gapW / 2, tank.bottom - 4, gapW, 8); });
     ctx.restore();
   }

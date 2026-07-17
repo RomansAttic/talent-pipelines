@@ -44,7 +44,8 @@ const CONFIG = {
   CHANNEL_PIPE_WIDTH: 14,    // entry-channel feeder pipe diameter
   BRANCH_WIDTH: 13,          // bucket branch pipe diameter
   LANE_OFFSET: 45,           // spacing between the 3 parallel connector pipes
-  TANK2_OFFSET_X: 165,       // how far right tank2's spine sits from tank1's
+  TANK2_OFFSET_X: 200,       // how far right tank2's spine sits from tank1's — long enough that the tank1->tank2 rails have room for their category labels
+  CONN2_PIPE_WIDTH: 14,      // tank2->rail lanes are narrower than the trunk: five of them have to fit across tank2's bottom wall
   TANK_FILL_EASE: 0.0006,    // how fast the displayed water level chases the real occupancy (lower = slower)
   BUCKET_COLUMNS: 20,        // fine-grained pile-height slots across a bucket's width, for a mound silhouette rather than a few fat towers
   BUCKET_ROOF_H: 16,         // peak height of the bucket's pitched roof above its side walls
@@ -68,7 +69,10 @@ const CONFIG = {
   // that enter a given major pipe survive to the far end — keeping the
   // visible downstream flow sparse. shortfall covers the invisible
   // supply-gap attrition on undersupplied bucket branches (below).
-  LEAK_SEVERITY: { funnel: 1.5, caring: 2.2, upskilling: 1.3, jobs: 1.15, shortfall: 1.0 },
+  // upskilling was 1.3 when its 3 lanes carried one leak each; with 5
+  // labeled lanes only 3 of which have a leak, per-droplet exposure fell
+  // and the rate is raised to keep end-to-end arrivals about the same.
+  LEAK_SEVERITY: { funnel: 1.5, caring: 2.2, upskilling: 2.2, jobs: 1.15, shortfall: 1.0 },
   // Invisible per-branch attrition for the bucket paths the field fails to
   // supply. Tuned (together with each person type's bucketWeights) so these
   // four buckets each receive roughly 1 successful entry for every 20 that
@@ -209,6 +213,58 @@ const ENTRY_CHANNELS = [
   },
 ];
 
+// ── Labeled connector lanes between stages, one per category from the
+// post. Same hover-tooltip shape as ENTRY_CHANNELS (fullLabel +
+// examples); order is the lane order left-to-right. CARING_LANES ride
+// the three tank1->tank2 rails, UPSKILL_LANES the five tank2->rail
+// drops, and JOB_RESOURCES labels the distribution rail itself. ──
+// Lane 0 is the leftmost outlet, which gets the longest horizontal rail
+// (and so carries the longest label); on screen the rails stack with
+// lane 2 on top, so top-to-bottom this reads in the post's order:
+// Events, Other Communities, Online Resources.
+const CARING_LANES = [
+  {
+    id: 'care_online', label: 'Online Resources', fullLabel: 'Online Resources',
+    examples: 'Career consultancy groups (80,000 Hours · Probably Good · Successif · High-Impact Professionals · SteadRise · AI Safety Quest · BlueDot) · dedicated blogs',
+  },
+  {
+    id: 'care_communities', label: 'Other Communities', fullLabel: 'Other Communities',
+    examples: 'Local/University EA, Rationalist, and AI Safety groups · friend groups · virtual forums (EA Forum · LessWrong · Substack)',
+  },
+  {
+    id: 'care_events', label: 'Events', fullLabel: 'Events',
+    examples: 'Conferences (Effective Altruism Global · The Curve · Control Conference) · Retreats (University EA retreats · Action Potential · Global Challenges Project)',
+  },
+];
+
+const UPSKILL_LANES = [
+  {
+    id: 'up_courses', label: 'Online Courses', fullLabel: 'Online Training Courses',
+    examples: 'BlueDot · CAIS virtual courses · ARENA · reading lists · virtual fellowships',
+  },
+  {
+    id: 'up_research', label: 'Research Mentorships', fullLabel: 'Research Mentorship Programs',
+    examples: 'SPAR · ERA · MATS · Anthropic Fellows · LASR · Pivotal · Astra · other fellowships and internships',
+  },
+  {
+    id: 'up_policy', label: 'Policy Mentorships', fullLabel: 'Policy Mentorship Programs',
+    examples: 'STPI Science Policy Fellowship · AAAS Science & Technology Policy Fellowship · Horizon Fellowship · GovAI · Talos Fellowship · IAPS AI Policy Fellowship · RAND Fellowships · LawAI fellowships · other fellowships and internships',
+  },
+  {
+    id: 'up_other', label: 'Other Mentorships', fullLabel: 'Other Mentorship Programs',
+    examples: 'Generator Residency (generalists) · Tarbell Center (journalism) · Astra/MATS Fieldbuilding · Seldon Lab (entrepreneurship) · BlueDot Incubator · Frame Fellowship (comms) · non-AI-safety work experience',
+  },
+  {
+    id: 'up_transition', label: 'Career Transitions', fullLabel: 'Career Transition Materials',
+    examples: 'High-Impact Professionals career transition materials · university internship-support/study grants · CEA bootcamps',
+  },
+];
+
+const JOB_RESOURCES = {
+  id: 'job_resources', label: 'JOB DECISION RESOURCES', fullLabel: 'Job Decision Resources',
+  examples: '80,000 Hours career guides · EA Forum posts · discussions with relevant mentors/friends, especially at conferences or co-working spaces · advising calls (Probably Good · Successif · High Impact Professionals · SteadRise)',
+};
+
 // ── Which entry channels belong to the same funnel category from the
 // post (and so share one pipe down to tank1, rather than each getting
 // its own) ───────────────────────────────────────────────────────
@@ -285,9 +341,12 @@ const LEAKS = [
     solution: 'Make more events! More conferences, hackathons, meetups, and panels in more places give more people a chance at a first point of contact.',
   },
 
-  // ── Caring-stage leaks (on the pipes toward upskilling) ──
+  // ── Caring-stage leaks (on the pipes toward upskilling). `lane`
+  // pins a leak's mark/checkpoint to the connector lane whose category
+  // it belongs to (index into CARING_LANES / UPSKILL_LANES), instead of
+  // the old arbitrary round-robin spread. ──
   {
-    id:'events_attendance', stage:'caring',
+    id:'events_attendance', stage:'caring', lane: 2,
     title: 'Some People Might Never Make It to an Event',
     escapeRate: 0.55, fixedEscapeRate: 0.38, fixed: false,
     problem: 'While many people self-report getting lots of value from events, some people might never make it to one.',
@@ -295,7 +354,7 @@ const LEAKS = [
     impactNote: 'Note: The primary “theory of change” for many of these events isn’t solely to build talent pipelines. Much of their value comes from building political will, increasing people’s “surface area for luck,” and convincing important people that these issues are worth caring about.',
   },
   {
-    id:'advising_quality', stage:'caring',
+    id:'advising_quality', stage:'caring', lane: 0,
     title: 'Career Advising Can Fail to Be Helpful Enough',
     escapeRate: 0.55, fixedEscapeRate: 0.40, fixed: false,
     problem: 'While it’s important for a lot of career advising to be personalized, it may often fail to meet a certain level of helpfulness. For example, I have friends who were delayed from learning more about AI safety because their BlueDot mentor didn’t give them good advice on where they could go next to gain more skills.',
@@ -306,21 +365,21 @@ const LEAKS = [
 
   // ── Upskilling-stage leaks ──
   {
-    id:'program_cause_prio', stage:'upskilling',
+    id:'program_cause_prio', stage:'upskilling', lane: 1,
     title: 'Many Program Participants Don’t Prioritize Existential Risk',
     escapeRate: 0.45, fixedEscapeRate: 0.35, fixed: false,
     problem: 'Many people who end up accepted into many of these research programs don’t actually care that much about reducing existential risks, meaning that they may be less likely to take on highly impactful jobs if given the opportunity (for example, choosing to work at a lab over a research org). This is an inefficient use of mentor time and resources.',
     solution: 'Dedicate sections of these programs to talking about why these risks are important to think about and prioritize. Explicit cause prioritization work can make participants understand why they should be trying to align AGI, rather than build it. Note: I’m quite uncertain about how valuable these types of programs are, or if they would even be a net-positive.',
   },
   {
-    id:'program_rejection', stage:'upskilling',
+    id:'program_rejection', stage:'upskilling', lane: 2,
     title: 'Rejected Applicants Feel Discouraged and Opt Out',
     escapeRate: 0.50, fixedEscapeRate: 0.35, fixed: false,
     problem: 'Low acceptance rates mean that many people who get rejected from various programs feel discouraged and opt out of applying for more.',
     solution: 'Help direct people to the places where they should be applying first. If people tried applying for MATS with no other experience, they have little chance of getting in. Tell them to check out BlueDot, ARENA, and SPAR first. Note: Many programs already do this or something similar. But do all of them?',
   },
   {
-    id:'career_transition_uncertainty', stage:'upskilling', noFix: true,
+    id:'career_transition_uncertainty', stage:'upskilling', lane: 4, noFix: true,
     title: 'Personal Uncertainty: Career Transitions',
     escapeRate: 0.35, fixedEscapeRate: 0.35, fixed: false,
     problem: 'Does everyone who want to pivot careers have an accessible path to doing so? Maybe they do, but if they don’t, what can we do about it?',

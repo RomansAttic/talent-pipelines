@@ -20,7 +20,7 @@
   // band's vertical range, and fade back out when it leaves.
   let layerAlpha = {};
   let hoveredParticle = null;
-  let hoveredChannelIdx = null;     // entry-channel hovered
+  let hoveredSeg = null;            // entry channel or labeled connector lane hovered
   let leakHitZones    = [];         // rebuilt each frame
   let infoHitZones     = [];        // rebuilt each frame
   let selectedLeak    = null;
@@ -227,7 +227,7 @@
     drawPipeline(pCtx, layout, leaks, bucketCounts, tankOccupancy, leakHitZones, infoHitZones);
 
     hoveredParticle = null;
-    hoveredChannelIdx = null;
+    hoveredSeg = null;
 
     particles.forEach(p => {
       if (p.isGhost) return;
@@ -253,18 +253,31 @@
       if (zone.type === 'funnelSeg') {
         if (mouseX >= zone.x && mouseX <= zone.x + zone.w &&
             mouseY >= zone.y && mouseY <= zone.y + zone.h) {
-          hoveredChannelIdx = zone.segIdx;
+          hoveredSeg = zone.seg;
           break;
         }
       }
     }
 
-    // Channel tooltip takes priority over a particle tooltip when both
+    // Labeled connector lanes (caring/upskilling categories, job-decision
+    // rail) share the funnels' tooltip. A lane's hover zone necessarily
+    // contains its own leak badge, so the badge (which opens the side
+    // panel) wins when the cursor is on it.
+    if (!hoveredSeg && !_findLeakAt(mouseX, mouseY)) {
+      for (const zone of layout.laneZones) {
+        if (mouseX >= zone.x && mouseX <= zone.x + zone.w &&
+            mouseY >= zone.y && mouseY <= zone.y + zone.h) {
+          hoveredSeg = zone.seg;
+          break;
+        }
+      }
+    }
+
+    // Segment tooltip takes priority over a particle tooltip when both
     // apply at once, so the two boxes never try to render on top of
     // each other.
-    if (hoveredChannelIdx !== null) {
-      const seg = ENTRY_CHANNELS[hoveredChannelIdx];
-      drawChannelTooltip(pCtx, seg, mouseX, mouseY, layout.width);
+    if (hoveredSeg) {
+      drawChannelTooltip(pCtx, hoveredSeg, mouseX, mouseY, layout.width);
     } else if (hoveredParticle) {
       hoveredParticle.drawTooltip(pCtx);
     }
